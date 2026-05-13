@@ -1,0 +1,2448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study Tracker - Modern Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Outfit:wght@300;400;500;600;700;800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+<style>
+:root {
+  --bg:#04040c; --bg2:#080814; --bg3:#0e0e1c; --panel:#0b0b18;
+  --border:#1a1a30; --border-bright:#35356a;
+  --green:#7dd3a8; --red:#e07070; --blue:#7ab3d4; --yellow:#d4b896; --purple:#a98ec9;
+  --text:#e8e4dc; --text2:#8a8478; --text3:#3e3a34;
+  --flair-green: rgba(125, 211, 168, 0.05);
+  --flair-blue: rgba(122, 179, 212, 0.04);
+  --font-main: 'Outfit', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --font-head: 'DM Serif Display', serif;
+  --font-accent: 'Cormorant Garamond', serif;
+  --radius: 6px;
+  --glow-green: 0 0 20px rgba(125,211,168,0.12), 0 0 60px rgba(125,211,168,0.04);
+  --glow-red: 0 0 20px rgba(224,112,112,0.18);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content:'';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 0%, rgba(0,255,163,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(56,182,255,0.05) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 30% at 50% 50%, rgba(255,41,82,0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body > * { position: relative; z-index: 1; }
+
+/* SCANLINE EFFECT */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* ======= ANIMATIONS ======= */
+@keyframes flairPulse {
+  0%,100% { box-shadow: 0 0 0 1px rgba(0,255,163,0.2), 0 0 30px rgba(0,255,163,0.08); }
+  50% { box-shadow: 0 0 0 1px rgba(0,255,163,0.5), 0 0 60px rgba(0,255,163,0.18); }
+}
+@keyframes blinkRed {
+  0%,100% { opacity:1; box-shadow: 0 0 8px var(--red); }
+  50% { opacity:0.1; box-shadow: none; }
+}
+@keyframes blinkYellow {
+  0%,100% { opacity:1; box-shadow: 0 0 8px var(--yellow); background: var(--yellow); }
+  50% { opacity:0.15; box-shadow: none; }
+}
+.live-dot.paused {
+  background: var(--yellow);
+  animation: blinkYellow 1.4s infinite;
+}
+@keyframes fluidFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes fadeIn {
+  from { opacity:0; transform: translateY(8px); }
+  to { opacity:1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity:0; transform: translateX(-12px); }
+  to { opacity:1; transform: translateX(0); }
+}
+@keyframes rankBump {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes topGlow {
+  0%,100% { box-shadow: inset 0 0 40px rgba(255,215,0,0.04), 0 0 0 1px rgba(255,215,0,0.25); }
+  50% { box-shadow: inset 0 0 80px rgba(255,215,0,0.10), 0 0 0 1px rgba(255,215,0,0.5); }
+}
+
+/* ======= HEADER ======= */
+.hdr {
+  background: rgba(7,7,16,0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 30px;
+  display: flex;
+  align-items: center;
+  height: 68px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.fw-logo {
+  width: 110px; height: 40px;
+  background: linear-gradient(135deg, var(--red), #c45a5a);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-head); font-weight: 400; font-size: 17px; color: #fff;
+  clip-path: polygon(8% 0%, 100% 0%, 92% 100%, 0% 100%);
+  letter-spacing: 2px;
+  box-shadow: var(--glow-red);
+}
+.hdr-title {
+  margin-left: 18px;
+  font-size: 13px;
+  font-weight: 300;
+  text-transform: uppercase;
+  letter-spacing: 6px;
+  color: var(--text2);
+}
+.hdr-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.top-clock {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--blue);
+  letter-spacing: 2px;
+  text-shadow: 0 0 15px rgba(56,182,255,0.4);
+}
+.hdr-user-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--green);
+  background: rgba(0,255,163,0.08);
+  border: 1px solid rgba(0,255,163,0.2);
+  padding: 4px 10px;
+  border-radius: 3px;
+  letter-spacing: 1px;
+}
+
+/* ======= QUOTE ======= */
+.quote-box {
+  padding: 36px 20px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, transparent, rgba(7,7,16,0.6));
+  position: relative;
+  overflow: hidden;
+}
+.quote-box::before {
+  content: '"';
+  position: absolute;
+  top: -20px; left: 30px;
+  font-size: 180px;
+  color: rgba(0,255,163,0.04);
+  font-family: Georgia, serif;
+  line-height: 1;
+  pointer-events: none;
+}
+#quote-text {
+  font-size: 21px;
+  color: var(--text2);
+  max-width: 760px;
+  margin: 0 auto;
+  line-height: 1.8;
+  transition: opacity 0.6s;
+  font-weight: 400;
+  font-family: var(--font-accent);
+  font-style: italic;
+  letter-spacing: 0.3px;
+}
+#quote-auth {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  color: var(--red);
+  margin-top: 12px;
+  font-weight: 700;
+}
+
+/* ======= TABS ======= */
+.tabs {
+  background: rgba(7,7,16,0.9);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 30px;
+  display: flex;
+  gap: 0;
+  position: sticky;
+  top: 68px;
+  z-index: 99;
+}
+.tab {
+  padding: 18px 24px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.3s;
+  position: relative;
+}
+.tab:hover { color: var(--text2); }
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--red);
+}
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--red), transparent);
+}
+
+/* ======= MAIN ======= */
+.main { padding: 30px; max-width: 1300px; margin: 0 auto; }
+.section { display: none; }
+.section.active { display: block; animation: fadeIn 0.4s ease; }
+
+/* ======= SESSION CARDS ======= */
+.timer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 16px;
+}
+
+.mcard {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 22px;
+  border-radius: var(--radius);
+  transition: all 0.4s;
+  position: relative;
+  overflow: hidden;
+  animation: fadeIn 0.5s ease both;
+}
+
+.mcard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--member-color, var(--green)), transparent);
+  opacity: 0.5;
+}
+
+.mcard.active-flair {
+  animation: flairPulse 3s infinite;
+  border-color: rgba(0,255,163,0.3);
+}
+
+.mcard.rank-1 {
+  animation: topGlow 3s infinite;
+  border-color: rgba(255,215,0,0.3) !important;
+}
+.mcard.rank-1::before {
+  background: linear-gradient(90deg, transparent, gold, transparent) !important;
+  opacity: 0.7;
+}
+
+.mcard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.member-name {
+  font-weight: 400;
+  font-size: 17px;
+  letter-spacing: 0.5px;
+  font-family: var(--font-head);
+}
+
+.rank-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid;
+  letter-spacing: 1px;
+}
+
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--red);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.live-dot {
+  width: 8px; height: 8px;
+  background: var(--red);
+  border-radius: 50%;
+  animation: blinkRed 1s infinite;
+}
+
+.timer-disp {
+  font-family: var(--font-mono);
+  font-size: 44px;
+  color: var(--green);
+  margin: 14px 0;
+  text-align: center;
+  text-shadow: 0 0 18px rgba(125,211,168,0.25);
+  letter-spacing: 3px;
+  animation: glowPulse 5s infinite;
+}
+
+@keyframes glowPulse {
+  0%,100% { text-shadow: 0 0 10px rgba(125,211,168,0.2); }
+  50% { text-shadow: 0 0 25px rgba(125,211,168,0.5), 0 0 5px rgba(125,211,168,0.3); }
+}
+
+.mcard:not(.active-flair) .timer-disp {
+  color: var(--text3);
+  text-shadow: none;
+  animation: none;
+  font-size: 38px;
+}
+
+.study-topic-area {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+textarea {
+  width: 100%;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 12px;
+  color: var(--text);
+  resize: none;
+  font-family: var(--font-main);
+  font-size: 13px;
+  line-height: 1.5;
+  transition: border-color 0.3s, box-shadow 0.3s;
+  outline: none;
+}
+textarea:focus {
+  border-color: var(--border-bright);
+  box-shadow: 0 0 0 2px rgba(56,182,255,0.08);
+}
+textarea::placeholder { color: var(--text3); font-size: 12px; }
+
+.char-hint {
+  font-size: 10px;
+  color: var(--text3);
+  text-align: right;
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  transition: color 0.3s;
+}
+.char-hint.ok { color: var(--green); }
+.char-hint.warn { color: var(--red); }
+
+.btn {
+  padding: 13px;
+  border: none;
+  font-weight: 800;
+  cursor: pointer;
+  text-transform: uppercase;
+  font-family: var(--font-head);
+  font-size: 15px;
+  width: 100%;
+  border-radius: 4px;
+  letter-spacing: 3px;
+  transition: all 0.25s;
+  position: relative;
+  overflow: hidden;
+}
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(rgba(255,255,255,0.1), transparent);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.btn:hover::after { opacity: 1; }
+.btn:active { transform: scale(0.98); }
+.btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn-start {
+  background: linear-gradient(135deg, #00ffa3, #00d4a1);
+  color: var(--bg);
+  box-shadow: 0 4px 20px rgba(0,255,163,0.2);
+}
+.btn-start:hover { box-shadow: 0 4px 30px rgba(0,255,163,0.4); }
+.btn-stop {
+  background: linear-gradient(135deg, var(--red), #ff6b6b);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(255,41,82,0.25);
+}
+.btn-stop:hover { box-shadow: 0 4px 30px rgba(255,41,82,0.45); }
+
+.btn-pause {
+  background: rgba(212,184,150,0.12);
+  color: var(--yellow);
+  border: 1px solid rgba(212,184,150,0.3);
+  box-shadow: none;
+  font-size: 13px;
+  padding: 9px;
+  margin-bottom: 8px;
+  letter-spacing: 2px;
+}
+.btn-pause:hover { background: rgba(212,184,150,0.2); box-shadow: 0 0 15px rgba(212,184,150,0.15); }
+.btn-pause.is-paused {
+  background: rgba(212,184,150,0.18);
+  border-color: rgba(212,184,150,0.5);
+  color: var(--yellow);
+}
+
+.session-hours-small {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text3);
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+}
+
+.topic-display {
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text2);
+  min-height: 36px;
+  font-style: italic;
+  margin-bottom: 0;
+}
+
+/* ======= STATS ======= */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 30px;
+}
+.stat-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+.stat-card:hover { border-color: var(--border-bright); }
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--blue), transparent);
+  opacity: 0.4;
+}
+.stat-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 10px;
+  letter-spacing: 2px;
+}
+.stat-val {
+  font-size: 38px;
+  font-weight: 800;
+  font-family: var(--font-head);
+  line-height: 1;
+  background: linear-gradient(135deg, var(--text), var(--text2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.goal-bar-bg {
+  width: 100%;
+  height: 4px;
+  background: var(--bg);
+  border-radius: 2px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+.goal-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), #00d4a1);
+  transition: width 1.2s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 0 10px rgba(0,255,163,0.5);
+  border-radius: 2px;
+}
+
+/* ======= INTELLIGENCE BARS ======= */
+.intel-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+.intel-title {
+  font-family: var(--font-head);
+  font-size: 12px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 24px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.h-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 10px 0;
+  animation: slideIn 0.5s ease both;
+}
+.h-bar-name {
+  width: 180px;
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.h-bar-wrap {
+  flex-grow: 1;
+  height: 20px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+.h-bar-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 1.5s cubic-bezier(0.4,0,0.2,1);
+  background-size: 200% 100%;
+  animation: fluidFlow 4s infinite linear;
+  position: relative;
+}
+.h-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: rgba(255,255,255,0.12);
+  border-radius: 10px 10px 0 0;
+}
+.h-bar-hrs {
+  width: 55px;
+  font-family: var(--font-mono);
+  color: var(--green);
+  text-align: right;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* ======= LOGS ======= */
+.logs-panel {
+  background: var(--panel);
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+.f-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text3);
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-head);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+.f-btn:hover { border-color: var(--border-bright); color: var(--text2); }
+.f-btn.active {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+  box-shadow: 0 0 15px rgba(255,41,82,0.25);
+}
+
+.fw-table { width: 100%; border-collapse: collapse; }
+.fw-table th {
+  text-align: left;
+  color: var(--text3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-head);
+}
+.fw-table td {
+  padding: 13px 15px;
+  border-bottom: 1px solid rgba(255,255,255,0.025);
+  font-size: 13px;
+  color: var(--text2);
+  transition: background 0.2s;
+}
+.fw-table tr:hover td { background: rgba(255,255,255,0.02); }
+.fw-table tr:last-child td { border-bottom: none; }
+
+/* ======= WEEKLY ======= */
+.weekly-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+.weekly-grid { width: 100%; border-collapse: separate; border-spacing: 0; }
+.weekly-grid th {
+  color: var(--text3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 16px 10px;
+  text-align: center;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-head);
+}
+.weekly-grid th:first-child { text-align: left; padding-left: 25px; }
+.weekly-grid td {
+  background: var(--panel);
+  padding: 16px 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text2);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.2s;
+}
+.weekly-grid tr:last-child td { border-bottom: none; }
+.weekly-grid td:first-child {
+  text-align: left;
+  padding-left: 25px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.weekly-grid tr:hover td { background: rgba(255,255,255,0.018); }
+.weekly-val {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+}
+.weekly-empty { color: var(--text3); opacity: 0.3; font-size: 12px; }
+
+/* ======= LOAD OVERLAY ======= */
+#loadOverlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+.load-logo {
+  width: 180px; height: 70px;
+  background: linear-gradient(135deg, var(--red), #ff6b35);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-head); font-weight: 900; font-size: 30px; color: #fff;
+  clip-path: polygon(8% 0%, 100% 0%, 92% 100%, 0% 100%);
+  letter-spacing: 3px;
+  box-shadow: var(--glow-red);
+  margin-bottom: 24px;
+}
+.load-status {
+  font-family: var(--font-mono);
+  color: var(--text3);
+  letter-spacing: 5px;
+  font-size: 11px;
+}
+.load-bar-wrap {
+  width: 200px;
+  height: 2px;
+  background: var(--border);
+  margin-top: 20px;
+  overflow: hidden;
+}
+.load-bar-inner {
+  height: 100%;
+  background: var(--green);
+  width: 0%;
+  transition: width 1s;
+  box-shadow: 0 0 10px var(--green);
+}
+
+/* ======= USER SELECT ======= */
+.user-select-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 92%;
+  max-width: 440px;
+  margin-top: 20px;
+}
+.user-btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  padding: 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-head);
+  letter-spacing: 1px;
+  border-radius: 4px;
+  transition: all 0.25s;
+  text-transform: uppercase;
+}
+.user-btn:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}
+
+/* ======= DIVIDER ======= */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin: 28px 0 20px;
+  color: var(--text3);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-family: var(--font-head);
+}
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ======= RESPONSIVE ======= */
+@media (max-width: 600px) {
+  /* Header */
+  .hdr { padding: 0 14px; height: 56px; }
+  .hdr-title { display: none; }
+  .fw-logo { width: 90px; height: 34px; font-size: 14px; }
+  .top-clock { font-size: 12px; letter-spacing: 1px; }
+  .hdr-user-badge { font-size: 9px; padding: 3px 7px; }
+
+  /* Layout */
+  .main { padding: 12px; }
+  .timer-grid { grid-template-columns: 1fr; gap: 12px; }
+
+  /* Tabs — scrollable, no overflow */
+  .tabs { padding: 0 6px; gap: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; top: 56px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 12px 10px; font-size: 9px; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
+
+  /* Session tracker cards */
+  .mcard { padding: 14px 14px 16px; }
+  .member-name { font-size: 15px; }
+  .timer-disp { font-size: 34px !important; margin: 10px 0; letter-spacing: 2px; }
+  .mcard:not(.active-flair) .timer-disp { font-size: 28px !important; }
+  .session-hours-small { font-size: 10px; margin-bottom: 8px; }
+  .btn { font-size: 13px; padding: 11px; }
+  .btn-pause { font-size: 11px; padding: 8px; }
+
+  /* Dashboard */
+  .dash-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .stat-card { padding: 16px; }
+  .stat-val { font-size: 28px; }
+  .intel-panel { padding: 18px; }
+  .h-bar-name { width: 95px; font-size: 11px; }
+  .h-bar-hrs { width: 42px; font-size: 11px; }
+
+  /* Pomodoro */
+  .pomo-wrap { gap: 14px; }
+  .pomo-panel { padding: 20px 14px; }
+  .pomo-settings-panel { padding: 20px 14px; }
+  .pomo-time-display { font-size: 38px; letter-spacing: 2px; }
+  .pomo-set-row { gap: 8px; flex-wrap: nowrap; }
+  .pomo-set-label { font-size: 9px; }
+  .pomo-slider { width: 100px; flex-shrink: 0; }
+  .pomo-set-val { width: 30px; font-size: 12px; }
+
+  /* User selection */
+  .user-select-grid { grid-template-columns: 1fr; }
+
+  /* Weekly table */
+  .weekly-wrap { font-size: 11px; }
+  .weekly-grid td, .weekly-grid th { padding: 10px 6px; }
+  .weekly-val { font-size: 10px; padding: 3px 6px; }
+
+  /* Logs */
+  .logs-panel { padding: 16px; }
+  .fw-table th, .fw-table td { padding: 10px 10px; font-size: 11px; }
+
+  /* Quote */
+  #quote-text { font-size: 16px; }
+}
+
+/* ======= DEVELOPER PANEL ======= */
+.dev-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.dev-panel {
+  background: var(--panel);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  padding: 32px;
+  width: 92%;
+  max-width: 500px;
+  max-height: 82vh;
+  overflow-y: auto;
+  box-shadow: 0 0 60px rgba(56,182,255,0.14), 0 0 0 1px rgba(56,182,255,0.1);
+  animation: fadeIn 0.3s ease;
+}
+.dev-title {
+  font-family: var(--font-head);
+  font-size: 18px;
+  color: var(--blue);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.dev-subtitle {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 3px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.dev-section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: var(--text3);
+  margin: 22px 0 12px;
+  font-family: var(--font-head);
+}
+.dev-input {
+  width: 100%;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 11px 14px;
+  color: var(--text);
+  font-family: var(--font-main);
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 10px;
+  transition: border-color 0.3s;
+}
+.dev-input:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(122,179,212,0.1); }
+.dev-add-btn {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid rgba(125,211,168,0.3);
+  background: rgba(125,211,168,0.08);
+  color: var(--green);
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+.dev-add-btn:hover { background: rgba(125,211,168,0.16); box-shadow: 0 0 20px rgba(125,211,168,0.1); }
+.dev-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dev-member-row:last-child { border-bottom: none; }
+.dev-member-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.dev-color-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dev-member-name {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dev-member-name.suspended {
+  opacity: 0.38;
+  text-decoration: line-through;
+  color: var(--text3);
+}
+.dev-suspended-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--red);
+  background: rgba(224,112,112,0.1);
+  border: 1px solid rgba(224,112,112,0.25);
+  padding: 2px 7px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.dev-action-btn {
+  padding: 7px 14px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  margin-left: 10px;
+}
+.dev-action-suspend {
+  background: rgba(224,112,112,0.1);
+  color: var(--red);
+  border: 1px solid rgba(224,112,112,0.3);
+}
+.dev-action-suspend:hover { background: rgba(224,112,112,0.2); }
+.dev-action-restore {
+  background: rgba(122,179,212,0.1);
+  color: var(--blue);
+  border: 1px solid rgba(122,179,212,0.3);
+}
+.dev-action-restore:hover { background: rgba(122,179,212,0.2); }
+.dev-close-btn {
+  width: 100%;
+  padding: 11px;
+  margin-top: 22px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  text-transform: uppercase;
+}
+.dev-close-btn:hover { border-color: var(--border-bright); color: var(--text2); }
+.dev-msg {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 9px 12px;
+  border-radius: 4px;
+  margin-top: 10px;
+  text-align: center;
+  letter-spacing: 1px;
+  display: none;
+}
+.dev-msg.ok { background: rgba(125,211,168,0.1); color: var(--green); border: 1px solid rgba(125,211,168,0.2); }
+.dev-msg.err { background: rgba(224,112,112,0.1); color: var(--red); border: 1px solid rgba(224,112,112,0.2); }
+.dev-loading {
+  text-align: center;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  padding: 20px 0;
+}
+
+/* OATH & RULES STYLING */
+.oath-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 30px;
+    line-height: 1.8;
+}
+.oath-title {
+    font-family: var(--font-head);
+    font-size: 24px;
+    color: var(--red);
+    margin-bottom: 20px;
+    letter-spacing: 2px;
+}
+.oath-content {
+    white-space: pre-wrap;
+    font-family: var(--font-accent);
+    font-size: 18px;
+    color: var(--text2);
+}
+.rules-list {
+    margin-top: 25px;
+    list-style: none;
+}
+.rules-list li {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    gap: 15px;
+}
+.rules-list li::before {
+    content: '⚡';
+    color: var(--yellow);
+}
+
+/* ======= POMODORO ======= */
+@keyframes pomodoroTick {
+  0%,100% { opacity:1; }
+  50% { opacity:0.6; }
+}
+@keyframes pomodoroRing {
+  0% { stroke-dashoffset: 628; }
+}
+.pomo-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media(max-width:780px) { .pomo-wrap { grid-template-columns: 1fr; } }
+
+.pomo-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+}
+.pomo-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--purple), transparent);
+  opacity: 0.5;
+}
+
+.pomo-title {
+  font-family: var(--font-head);
+  font-size: 11px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 28px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pomo-mode-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 28px;
+}
+.pomo-mode-btn {
+  flex: 1;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.25s;
+}
+.pomo-mode-btn:hover { border-color: var(--border-bright); color: var(--text2); }
+.pomo-mode-btn.active {
+  border-color: var(--purple);
+  background: rgba(169,142,201,0.12);
+  color: var(--purple);
+  box-shadow: 0 0 12px rgba(169,142,201,0.15);
+}
+
+.pomo-clock-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 28px;
+  position: relative;
+}
+.pomo-svg {
+  transform: rotate(-90deg);
+}
+.pomo-ring-bg {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 6;
+}
+.pomo-ring-fill {
+  fill: none;
+  stroke: var(--purple);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 628;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1s linear, stroke 0.4s;
+  filter: drop-shadow(0 0 8px rgba(169,142,201,0.4));
+}
+.pomo-ring-fill.break { stroke: var(--green); filter: drop-shadow(0 0 8px rgba(125,211,168,0.4)); }
+.pomo-ring-fill.long-break { stroke: var(--blue); filter: drop-shadow(0 0 8px rgba(122,179,212,0.4)); }
+
+.pomo-time-center {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.pomo-time-display {
+  font-family: var(--font-mono);
+  font-size: 46px;
+  color: var(--text);
+  letter-spacing: 3px;
+  line-height: 1;
+}
+.pomo-time-display.running { animation: pomodoroTick 1s infinite; }
+.pomo-mode-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-top: 8px;
+}
+
+.pomo-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.pomo-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--border-bright);
+  background: transparent;
+  transition: all 0.3s;
+}
+.pomo-dot.done {
+  background: var(--purple);
+  border-color: var(--purple);
+  box-shadow: 0 0 8px rgba(169,142,201,0.5);
+}
+.pomo-dot.current {
+  border-color: var(--purple);
+  animation: blinkRed 1s infinite;
+  border-color: var(--purple) !important;
+}
+
+.pomo-btn-row {
+  display: flex;
+  gap: 10px;
+}
+.btn-pomo-start {
+  flex: 2;
+  background: linear-gradient(135deg, var(--purple), #8b6fb0);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(169,142,201,0.25);
+}
+.btn-pomo-start:hover { box-shadow: 0 4px 30px rgba(169,142,201,0.45); }
+.btn-pomo-reset {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  color: var(--text3);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  padding: 13px;
+}
+.btn-pomo-reset:hover { background: rgba(255,255,255,0.08); color: var(--text2); }
+.btn-pomo-skip {
+  flex: 1;
+  background: rgba(122,179,212,0.08);
+  color: var(--blue);
+  border: 1px solid rgba(122,179,212,0.25);
+  font-size: 12px;
+  padding: 13px;
+}
+.btn-pomo-skip:hover { background: rgba(122,179,212,0.15); }
+
+/* Pomodoro settings panel */
+.pomo-settings-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+}
+.pomo-settings-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--blue), transparent);
+  opacity: 0.4;
+}
+.pomo-set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.pomo-set-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text3);
+  flex: 1;
+  min-width: 0;
+}
+.pomo-set-val {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--purple);
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.pomo-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 140px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.pomo-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--purple);
+  box-shadow: 0 0 8px rgba(169,142,201,0.5);
+  cursor: pointer;
+}
+.pomo-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 22px 0;
+}
+.pomo-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 0;
+}
+.pomo-stat-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 14px;
+  text-align: center;
+}
+.pomo-stat-num {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  color: var(--purple);
+  font-weight: 700;
+  line-height: 1;
+}
+.pomo-stat-lbl {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--text3);
+  margin-top: 6px;
+  font-family: var(--font-mono);
+}
+.pomo-log-list {
+  margin-top: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.pomo-log-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text3);
+  animation: slideIn 0.3s ease both;
+}
+.pomo-log-item:last-child { border-bottom: none; }
+.pomo-log-item span:first-child { color: var(--purple); }
+.pomo-log-empty {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 2px;
+  text-align: center;
+  padding: 20px 0;
+}
+</style>
+</head>
+<body>
+
+<div id="loadOverlay">
+  <div class="load-logo">RAHMAN</div>
+  <div class="load-status" id="loadStatus">INITIALIZING_...</div>
+  <div class="load-bar-wrap"><div class="load-bar-inner" id="loadBar"></div></div>
+</div>
+
+<div class="hdr">
+  <div class="fw-logo">RAHMAN</div>
+  <div class="hdr-title">Study Tracker</div>
+  <div class="hdr-right">
+    <div class="hdr-user-badge" id="userBadge" style="display:none"></div>
+    <div class="top-clock" id="topClock">00:00:00</div>
+  </div>
+</div>
+
+<div class="quote-box">
+  <div id="quote-text">"অপেক্ষা করো না, সময় কখনো একদম সঠিক হবে না।"</div>
+  <div id="quote-auth">— নেপোলিয়ন হিল</div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('timer', this)">Session</div>
+  <div class="tab" onclick="switchTab('logs', this)">Records</div>
+  <div class="tab" onclick="switchTab('dashboard', this)">Intelligence</div>
+  <div class="tab" onclick="switchTab('weekly', this)">Weekly</div>
+  <div class="tab" onclick="switchTab('pomodoro', this)">Pomodoro</div>
+  <div class="tab" onclick="switchTab('oath', this)">Oath & Rules</div>
+</div>
+
+<div class="main">
+
+  <div class="section active" id="sec-timer">
+    <div class="timer-grid" id="timerGrid"></div>
+  </div>
+
+  <div class="section" id="sec-logs">
+    <div class="logs-panel">
+      <div class="filter-row" id="filterContainer">
+        <button class="f-btn active" onclick="setLogFilter('ALL', this)">All Logs</button>
+      </div>
+      <table class="fw-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Member</th>
+            <th>Duration</th>
+            <th>Topic</th>
+          </tr>
+        </thead>
+        <tbody id="logsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section" id="sec-dashboard">
+    <div class="dash-grid">
+      <div class="stat-card">
+        <div class="stat-lbl">Group Total Hours</div>
+        <div class="stat-val" id="stat-total">0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-lbl">Today's Focus</div>
+        <div class="stat-val" id="stat-today">0.00</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-lbl">Daily Goal (40h)</div>
+        <div class="stat-val" style="background: linear-gradient(135deg,var(--green),#00d4a1); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;" id="goal-pct">0%</div>
+        <div class="goal-bar-bg"><div class="goal-bar-fill" id="goal-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="intel-panel">
+      <div class="intel-title">⚡ Performance Leaderboard</div>
+      <div id="leaderBody"></div>
+    </div>
+  </div>
+
+  <div class="section" id="sec-weekly">
+    <div class="weekly-wrap">
+      <table class="weekly-grid">
+        <thead id="weeklyHead"></thead>
+        <tbody id="weeklyBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section" id="sec-oath">
+    <div class="oath-panel">
+        <div class="oath-title">📜 The Group Oath</div>
+        <div class="oath-content" id="display-oath">No oath set by administrator.</div>
+        <div class="section-divider">GROUP RULES</div>
+        <ul class="rules-list" id="display-rules"><li>Rules will appear here when set.</li></ul>
+    </div>
+  </div>
+
+  <div class="section" id="sec-pomodoro">
+    <div class="pomo-wrap">
+      <!-- Left: Timer -->
+      <div class="pomo-panel">
+        <div class="pomo-title">🍅 Pomodoro Timer</div>
+        <div class="pomo-mode-bar">
+          <button class="pomo-mode-btn active" id="pmodeWork" onclick="pomoSetMode('work')">Focus</button>
+          <button class="pomo-mode-btn" id="pmodeShort" onclick="pomoSetMode('short')">Short Break</button>
+          <button class="pomo-mode-btn" id="pomoLong" onclick="pomoSetMode('long')">Long Break</button>
+        </div>
+        <div class="pomo-clock-wrap">
+          <svg class="pomo-svg" width="200" height="200" viewBox="0 0 200 200">
+            <circle class="pomo-ring-bg" cx="100" cy="100" r="90"/>
+            <circle class="pomo-ring-fill" id="pomoRing" cx="100" cy="100" r="90"/>
+          </svg>
+          <div class="pomo-time-center">
+            <div class="pomo-time-display" id="pomoDisplay">25:00</div>
+            <div class="pomo-mode-label" id="pomoModeLabel">Focus Time</div>
+          </div>
+        </div>
+        <div class="pomo-dots" id="pomoDots"></div>
+        <div class="study-topic-area" style="margin-bottom:12px;">
+          <textarea id="pomoTopic" rows="2" placeholder="What are you studying?" maxlength="200" oninput="pomoTopicChanged()"></textarea>
+          <div class="char-hint" id="pomoTopicHint" style="color:var(--text3);">Optional — shows in live session</div>
+        </div>
+        <div class="pomo-btn-row">
+          <button class="btn btn-pomo-start" id="pomoStartBtn" onclick="pomoToggle()">▶ Start</button>
+          <button class="btn btn-pomo-skip" onclick="pomoSkip()">⏭ Skip</button>
+          <button class="btn btn-pomo-reset" onclick="pomoReset()">↺ Reset</button>
+        </div>
+      </div>
+      <!-- Right: Settings + Stats -->
+      <div>
+        <div class="pomo-settings-panel" style="position:relative; margin-bottom:20px;">
+          <div class="pomo-title">⚙ Customise</div>
+          <div class="pomo-set-row">
+            <div class="pomo-set-label">Focus Duration</div>
+            <input type="range" class="pomo-slider" id="slWork" min="1" max="60" value="25" oninput="pomoUpdateSettings()">
+            <div class="pomo-set-val" id="valWork">25m</div>
+          </div>
+          <div class="pomo-set-row">
+            <div class="pomo-set-label">Short Break</div>
+            <input type="range" class="pomo-slider" id="slShort" min="1" max="30" value="5" oninput="pomoUpdateSettings()">
+            <div class="pomo-set-val" id="valShort">5m</div>
+          </div>
+          <div class="pomo-set-row">
+            <div class="pomo-set-label">Long Break</div>
+            <input type="range" class="pomo-slider" id="slLong" min="5" max="60" value="15" oninput="pomoUpdateSettings()">
+            <div class="pomo-set-val" id="valLong">15m</div>
+          </div>
+          <div class="pomo-set-row">
+            <div class="pomo-set-label">Cycles Before Long Break</div>
+            <input type="range" class="pomo-slider" id="slCycles" min="2" max="8" value="4" oninput="pomoUpdateSettings()">
+            <div class="pomo-set-val" id="valCycles">4</div>
+          </div>
+        </div>
+        <div class="pomo-settings-panel" style="position:relative;">
+          <div class="pomo-title">📊 Today's Stats</div>
+          <div class="pomo-stats-grid">
+            <div class="pomo-stat-box">
+              <div class="pomo-stat-num" id="pomoStatPomos">0</div>
+              <div class="pomo-stat-lbl">Pomodoros</div>
+            </div>
+            <div class="pomo-stat-box">
+              <div class="pomo-stat-num" id="pomoStatMins">0</div>
+              <div class="pomo-stat-lbl">Focus Mins</div>
+            </div>
+          </div>
+          <div class="pomo-divider"></div>
+          <div class="pomo-title" style="margin-bottom:14px;">Recent Sessions</div>
+          <div class="pomo-log-list" id="pomoLogList">
+            <div class="pomo-log-empty">No sessions yet today</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="devOverlay" class="dev-overlay" style="display:none">
+  <div class="dev-panel">
+    <div class="dev-title">🔧 Developer</div>
+    <div class="dev-subtitle">MEMBER MANAGEMENT CONSOLE</div>
+
+    <div class="dev-section-title">Add New Member</div>
+    <input class="dev-input" id="devNewName" type="text" placeholder="Full name (e.g. Raihan Ahmed)" maxlength="60" />
+    <button class="dev-add-btn" onclick="devAddMember()">+ Add Member</button>
+    <div class="dev-msg" id="devMsg"></div>
+
+    <div class="dev-section-title">Edit Group Oath</div>
+    <textarea class="dev-input" id="devOathText" rows="3" placeholder="Enter group oath (or paste PDF link)..."></textarea>
+    <button class="dev-add-btn" style="color:var(--blue); border-color:var(--blue); background:rgba(122,179,212,0.1);" onclick="devSaveOath()">Save Oath</button>
+
+    <div class="dev-section-title">Edit Group Rules</div>
+    <textarea class="dev-input" id="devRulesText" rows="3" placeholder="Enter rules (one per line)..."></textarea>
+    <button class="dev-add-btn" style="color:var(--blue); border-color:var(--blue); background:rgba(122,179,212,0.1);" onclick="devSaveRules()">Save Rules</button>
+
+    <div class="dev-section-title">Current Members</div>
+    <div id="devMemberList"><div class="dev-loading">LOADING...</div></div>
+
+    <button class="dev-close-btn" onclick="closeDevPanel()">✕ Close Panel</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  FIREBASE CONFIG — DO NOT MODIFY
+// ============================================================
+const firebaseConfig = {
+    apiKey: "AIzaSyCP3cpWaAQ1i8C93a4F_5qsnk84KZ6CZtU",
+    authDomain: "rahmansstudytracker.firebaseapp.com",
+    databaseURL: "https://rahmansstudytracker-default-rtdb.firebaseio.com",
+    projectId: "rahmansstudytracker",
+    storageBucket: "rahmansstudytracker.firebasestorage.app",
+    messagingSenderId: "456896961682",
+    appId: "1:456896961682:web:ead674692696c88a625a4b"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ============================================================
+//  CONSTANTS
+// ============================================================
+const B_QUOTES = [
+    {q: "সাফল্য মানেই শেষ নয়, ব্যর্থতা মানেই মৃত্যু নয়; আসল হলো এগিয়ে যাওয়ার সাহস ধরে রাখা।", a: "উইনস্টন চার্চিল"},
+    {q: "স্বপ্ন সেটা নয় যা তুমি ঘুমিয়ে দেখো, স্বপ্ন সেটাই যা তোমাকে ঘুমাতে দেয় না।", a: "এ পি জে আব্দুল কালাম"},
+    {q: "তুমি যদি এখন না পড়ো, তবে ভবিষ্যতে তোমাকে অন্যের স্বপ্নগুলো পূরণ করতে কাজ করতে হবে।", a: "অজ্ঞাত"},
+    {q: "কঠিন পরিশ্রমের কোনো বিকল্প নেই।", a: "টমাস আলভা এডিসন"},
+    {q: "অপেক্ষা করো না, সময় কখনো একদম সঠিক হবে না।", a: "নেপোলিয়ন হিল"},
+    {q: "আজকের পরিশ্রম আগামীকালের সাফল্যের ভিত্তি।", a: "অজ্ঞাত"},
+    {q: "প্রতিটি বিশেষজ্ঞ একসময় শিক্ষার্থী ছিলেন।", a: "হেলেন হেইস"}
+];
+
+let MEMBERS = [
+    "Abdur Rahman",
+    "Hannan",
+    "Yasin Arafat",
+    "Imtiaj Rahman",
+    "Sabbir Rahman(Tahsin)",
+    "Zidan Hasan",
+    "Nadim",
+    "Tanbirur Rahman (Taskin)"
+];
+
+let M_COLORS = {
+    "Abdur Rahman":           "#7ab8d4",
+    "Hannan":                 "#7dd3a8",
+    "Yasin Arafat":           "#c4a96b",
+    "Imtiaj Rahman":          "#a98ec9",
+    "Sabbir Rahman(Tahsin)":  "#d48a8a",
+    "Zidan Hasan":            "#6b9fd4",
+    "Nadim":                  "#d4a06b",
+    "Tanbirur Rahman (Taskin)": "#c48aad"
+};
+
+const SKEY = "fw_tracker_v3";
+let ME = localStorage.getItem("fw_me");
+let IS_ADMIN = localStorage.getItem("fw_role") === "admin";
+let sessions = [], timers = {}, currentFilter = "ALL";
+
+// ============================================================
+//  DEVELOPER Logic
+// ============================================================
+const DEV_PASSWORD = "RAHDEV2025";
+let IS_DEV = false;
+let devMembersCache = [];
+
+const NEW_MEMBER_COLORS = [
+    "#e8a87c", "#85c1e9", "#82e0aa", "#f1948a", "#d2b4de",
+    "#f8c471", "#76d7c4", "#aab7b8", "#f0b27a", "#5dade2",
+    "#a9dfbf", "#f1c40f", "#e59866", "#85929e", "#d98880"
+];
+
+function showDevLogin() {
+    const pass = prompt("Enter developer password:");
+    if (pass === null) return;
+    if (pass === DEV_PASSWORD) {
+        IS_DEV = true;
+        document.getElementById("devOverlay").style.display = "flex";
+        renderDevPanel();
+    } else {
+        alert("Incorrect password. Access denied.");
+    }
+}
+
+function closeDevPanel() {
+    document.getElementById("devOverlay").style.display = "none";
+}
+
+async function renderDevPanel() {
+    document.getElementById("devMemberList").innerHTML = '<div class="dev-loading">LOADING...</div>';
+    const snap = await db.ref(SKEY + '/config').once('value');
+    const config = snap.val() || {};
+    const configMembers = config.members || {};
+    
+    // Load current values into textareas
+    document.getElementById("devOathText").value = config.oath || "";
+    document.getElementById("devRulesText").value = config.rules || "";
+
+    const allMembers = Object.entries(configMembers).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+    devMembersCache = allMembers;
+
+    if (allMembers.length === 0) {
+        document.getElementById("devMemberList").innerHTML = '<div class="dev-loading">No members found.</div>';
+        return;
+    }
+
+    document.getElementById("devMemberList").innerHTML = allMembers.map(([name, cfg], idx) => `
+        <div class="dev-member-row">
+            <div class="dev-member-info">
+                <span class="dev-color-dot" style="background:${cfg.color}"></span>
+                <span class="dev-member-name${cfg.suspended ? ' suspended' : ''}">${name}</span>
+                ${cfg.suspended ? '<span class="dev-suspended-tag">SUSPENDED</span>' : ''}
+            </div>
+            <button class="dev-action-btn ${cfg.suspended ? 'dev-action-restore' : 'dev-action-suspend'}" onclick="devToggleSuspend(${idx})">
+                ${cfg.suspended ? 'Restore' : 'Suspend'}
+            </button>
+        </div>`).join('');
+}
+
+async function devSaveOath() {
+    const txt = document.getElementById("devOathText").value.trim();
+    await db.ref(SKEY + '/config/oath').set(txt);
+    showDevMsg("Oath saved.", "ok");
+}
+
+async function devSaveRules() {
+    const txt = document.getElementById("devRulesText").value.trim();
+    await db.ref(SKEY + '/config/rules').set(txt);
+    showDevMsg("Rules saved.", "ok");
+}
+
+async function devAddMember() {
+    const nameEl = document.getElementById("devNewName");
+    const name = nameEl.value.trim();
+    if (name.length < 2) { showDevMsg("Name must be at least 2 characters.", "err"); return; }
+    if (/[.$#\[\]\/]/.test(name)) { showDevMsg("Name cannot contain invalid characters", "err"); return; }
+
+    const snap = await db.ref(SKEY + '/config/members').once('value');
+    const existing = snap.val() || {};
+    if (existing[name]) { showDevMsg("Member exists.", "err"); return; }
+
+    const usedColors = Object.values(existing).map(c => c.color);
+    const available = NEW_MEMBER_COLORS.filter(c => !usedColors.includes(c));
+    const color = available.length > 0 ? available[0] : NEW_MEMBER_COLORS[Object.keys(existing).length % NEW_MEMBER_COLORS.length];
+    const order = Object.keys(existing).length;
+    await db.ref(SKEY + '/config/members/' + name).set({ color, order, suspended: false });
+
+    if (!MEMBERS.includes(name)) MEMBERS.push(name);
+    M_COLORS[name] = color;
+    nameEl.value = '';
+    showDevMsg('"' + name + '" added.', "ok");
+    renderDevPanel();
+    refreshSelectionScreen();
+}
+
+async function devToggleSuspend(idx) {
+    const [name, cfg] = devMembersCache[idx];
+    const newSuspended = !cfg.suspended;
+    await db.ref(SKEY + '/config/members/' + name + '/suspended').set(newSuspended);
+    await refreshMembersFromFirebase();
+    showDevMsg('"' + name + '" updated.', "ok");
+    renderDevPanel();
+    refreshSelectionScreen();
+}
+
+async function refreshMembersFromFirebase() {
+    const snap = await db.ref(SKEY + '/config/members').once('value');
+    const config = snap.val() || {};
+    const ordered = Object.entries(config).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+    MEMBERS.length = 0;
+    Object.keys(M_COLORS).forEach(k => delete M_COLORS[k]);
+    ordered.forEach(([n, c]) => {
+        M_COLORS[n] = c.color;
+        if (!c.suspended) MEMBERS.push(n);
+    });
+}
+
+function showDevMsg(msg, type) {
+    const el = document.getElementById("devMsg");
+    el.textContent = msg; el.className = "dev-msg " + type; el.style.display = "block";
+    setTimeout(() => { el.style.display = "none"; }, 3500);
+}
+
+function refreshSelectionScreen() {
+    const overlay = document.getElementById("loadOverlay");
+    if (!overlay || overlay.style.display === 'none') return;
+    overlay.innerHTML = buildSelectionHTML();
+}
+
+function buildSelectionHTML() {
+    return `
+        <div class="load-logo" style="margin-bottom:30px">SELECT</div>
+        <div style="font-family:var(--font-mono); color:var(--text3); letter-spacing:4px; font-size:11px; margin-bottom:24px;">WHO ARE YOU?</div>
+        <div class="user-select-grid">
+            ${MEMBERS.map((m, i) => `<button class="user-btn" style="border-color:${M_COLORS[m]}40; color:${M_COLORS[m]}" onclick="selectMember(${i})">${m}</button>`).join("")}
+            <button class="user-btn" style="grid-column:span 2; background:rgba(56,182,255,0.1); border-color:rgba(56,182,255,0.4); color:var(--blue);" onclick="localStorage.setItem('fw_role','admin');location.reload()">👁 ADMINISTRATOR VIEW</button>
+            <button class="user-btn" style="grid-column:span 2; background:rgba(100,100,180,0.08); border-color:rgba(100,100,180,0.35); color:#9090c8;" onclick="showDevLogin()">🔧 DEVELOPER</button>
+        </div>`;
+}
+
+function selectMember(idx) {
+    localStorage.setItem('fw_me', MEMBERS[idx]);
+    location.reload();
+}
+
+// ============================================================
+//  HELPERS & RENDER logic (Keeping your original logic character-perfect)
+// ============================================================
+function pad(n) { return n < 10 ? '0' + n : n; }
+function msToHMS(ms) {
+    ms = Math.max(0, ms);
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+function isPaused(member) { return !!(timers[member] && timers[member].pauseISO); }
+function studyMs(member) {
+    const t = timers[member];
+    if (!t) return 0;
+    const raw = Date.now() - new Date(t.startISO).getTime();
+    const accPaused = t.pausedMs || 0;
+    const curPause = t.pauseISO ? (Date.now() - new Date(t.pauseISO).getTime()) : 0;
+    return Math.max(0, raw - accPaused - curPause);
+}
+function currentPauseMs(member) {
+    const t = timers[member];
+    if (!t || !t.pauseISO) return 0;
+    return Date.now() - new Date(t.pauseISO).getTime();
+}
+function elapsed(member) { return msToHMS(studyMs(member)); }
+function elapsedHrs(iso) { return (Date.now() - new Date(iso).getTime()) / 3600000; }
+
+function initSync() {
+    db.ref(SKEY).on('value', snap => {
+        const data = snap.val() || {};
+        const rawSessions = data.sessions || {};
+        sessions = Array.isArray(rawSessions) ? rawSessions : Object.values(rawSessions);
+        timers = data.timers || {};
+        
+        // Sync Oath and Rules to display
+        if(data.config) {
+            document.getElementById("display-oath").textContent = data.config.oath || "No oath set.";
+            const rules = (data.config.rules || "").split('\n').filter(r => r.trim() !== "");
+            document.getElementById("display-rules").innerHTML = rules.length ? rules.map(r => `<li>${r}</li>`).join('') : "<li>No rules set.</li>";
+        }
+
+        reRender();
+        document.getElementById("loadOverlay").style.display = "none";
+    });
+}
+
+function getSortedMembers() {
+    return [...MEMBERS].sort((a, b) => {
+        const aLive = !!timers[a]; const bLive = !!timers[b];
+        if (aLive && bLive) return elapsedHrs(timers[b].startISO) - elapsedHrs(timers[a].startISO);
+        if (aLive) return -1; if (bLive) return 1;
+        const aTotal = sessions.filter(s => s.member === a).reduce((x, y) => x + y.hours, 0);
+        const bTotal = sessions.filter(s => s.member === b).reduce((x, y) => x + y.hours, 0);
+        return bTotal - aTotal;
+    });
+}
+
+function reRender() {
+    renderTimer(); renderLogs(); renderDashboard(); renderWeekly();
+}
+
+function renderTimer() {
+    const activeEl = document.activeElement;
+    const isMyTextArea = activeEl && activeEl.id === `tp-${ME}`;
+    const start = isMyTextArea ? activeEl.selectionStart : 0;
+    const end = isMyTextArea ? activeEl.selectionEnd : 0;
+    const val = isMyTextArea ? activeEl.value : null;
+
+    const sorted = getSortedMembers();
+    document.getElementById("timerGrid").innerHTML = sorted.map((m, idx) => {
+        const isRun = !!timers[m];
+        const color = M_COLORS[m];
+        const isTopLive = isRun && idx === 0;
+        const rankAmongLive = isRun ? sorted.filter(x => !!timers[x]).indexOf(m) : -1;
+        const totalHrs = sessions.filter(s => s.member === m).reduce((a, b) => a + b.hours, 0);
+        let rankBadgeHTML = '';
+        if (isRun) {
+            const medals = ['🥇', '🥈', '🥉'];
+            const medal = rankAmongLive < 3 ? medals[rankAmongLive] : `#${rankAmongLive + 1}`;
+            rankBadgeHTML = `<span class="rank-badge" style="color:${color}; border-color:${color}40; background:${color}10;">${medal} LIVE</span>`;
+        }
+        const cardClass = `mcard${isRun ? ' active-flair' : ''}${isTopLive ? ' rank-1' : ''}`;
+        let controlsHTML = '';
+        if (!IS_ADMIN && m === ME) {
+            if (isRun) {
+                const paused = isPaused(ME);
+                controlsHTML = `
+                    <div class="study-topic-area">
+                        <textarea id="tp-${m}" rows="2" placeholder="What are you studying?">${timers[m]?.topics || ''}</textarea>
+                        <div class="char-hint ok" id="hint-${m}">${paused ? '⏸ Paused' : 'Studying...'}</div>
+                    </div>
+                    <button class="btn btn-pause ${paused ? 'is-paused' : ''}" onclick="togglePause()">${paused ? '▶ Resume' : '⏸ Pause'}</button>
+                    <button class="btn btn-stop" onclick="stopTimer()">⏹ Stop Session</button>`;
+            } else {
+                controlsHTML = `
+                    <div class="study-topic-area">
+                        <textarea id="tp-${m}" rows="2" placeholder="What are you studying?" oninput="checkInput('${m}')" maxlength="200"></textarea>
+                        <div class="char-hint warn" id="hint-${m}">Min 3 characters required</div>
+                    </div>
+                    <button class="btn btn-start" id="startBtn-${m}" onclick="startTimer()" disabled>▶ Start Session</button>`;
+            }
+        } else if (isRun && timers[m]?.topics) {
+            controlsHTML = `<div class="topic-display">📚 ${timers[m].topics}</div>`;
+        }
+        return `
+        <div class="${cardClass}" style="--member-color:${color}; border-left: 3px solid ${color}; animation-delay:${idx * 0.05}s">
+            <div class="mcard-header">
+                <div class="member-name" style="color:${color}">${m}</div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    ${isRun ? `<div class="live-badge" style="${isPaused(m) ? 'color:var(--yellow)' : ''}"><span class="live-dot${isPaused(m) ? ' paused' : ''}"></span>${isPaused(m) ? 'PAUSED' : 'LIVE'}</div>` : ''}
+                    ${rankBadgeHTML}
+                </div>
+            </div>
+            <div class="session-hours-small">${totalHrs > 0 ? `Total: ${totalHrs.toFixed(1)}h` : 'No sessions yet'}</div>
+            <div class="timer-disp" id="tdisp-${m}">${isRun ? elapsed(m) : '00:00:00'}</div>
+            ${controlsHTML}
+        </div>`;
+    }).join("");
+
+    if (isMyTextArea) {
+        const el = document.getElementById(`tp-${ME}`);
+        if (el) { el.value = val; el.focus(); el.setSelectionRange(start, end); checkInput(ME); }
+    }
+}
+
+function checkInput(member) {
+    const ta = document.getElementById(`tp-${member}`);
+    const btn = document.getElementById(`startBtn-${member}`);
+    if (!ta || !btn) return;
+    btn.disabled = ta.value.trim().length < 3;
+}
+
+function renderLogs() {
+    let filtered = [...sessions];
+    if (currentFilter !== "ALL") filtered = filtered.filter(s => s.member === currentFilter);
+    document.getElementById("logsBody").innerHTML = filtered.reverse().slice(0, 40).map(s => `
+        <tr>
+            <td>${s.date}</td>
+            <td style="font-weight:700; color:${M_COLORS[s.member]}">${s.member}</td>
+            <td><span style="font-family:var(--font-mono); color:var(--green)">${s.hours.toFixed(2)}h</span></td>
+            <td style="color:var(--text2)">${s.topics || '—'}</td>
+        </tr>`).join("");
+}
+
+function renderDashboard() {
+    const totals = MEMBERS.map(m => ({ name: m, hrs: sessions.filter(s => s.member === m).reduce((a, b) => a + b.hours, 0) }));
+    const maxHrs = Math.max(...totals.map(t => t.hrs), 1);
+    const sorted = totals.sort((a, b) => b.hrs - a.hrs);
+    document.getElementById("leaderBody").innerHTML = sorted.map((l, i) => {
+        const pct = (l.hrs / maxHrs) * 100;
+        return `
+        <div class="h-bar-container" style="animation-delay:${i * 0.08}s">
+            <div class="h-bar-name" style="color:${M_COLORS[l.name]}">${i<3 ? ['🥇', '🥈', '🥉'][i] : '#'+(i+1)} ${l.name}</div>
+            <div class="h-bar-wrap"><div class="h-bar-fill" style="width:${pct}%; background:${M_COLORS[l.name]}"></div></div>
+            <div class="h-bar-hrs">${l.hrs.toFixed(1)}h</div>
+        </div>`;
+    }).join("");
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayHrs = sessions.filter(s => s.date === todayStr).reduce((a, b) => a + b.hours, 0);
+    document.getElementById("stat-total").textContent = sessions.reduce((a, b) => a + b.hours, 0).toFixed(2);
+    document.getElementById("stat-today").textContent = todayHrs.toFixed(2);
+    const goalPct = Math.min((todayHrs / 40) * 100, 100);
+    document.getElementById("goal-pct").textContent = goalPct.toFixed(1) + "%";
+    document.getElementById("goal-bar").style.width = goalPct + "%";
+}
+
+function renderWeekly() {
+    const curr = new Date(); const dow = curr.getDay();
+    const first = curr.getDate() - dow + (dow === 0 ? -6 : 1);
+    const week = []; for (let i = 0; i < 7; i++) { const d = new Date(curr); d.setDate(first + i); week.push(d.toISOString().slice(0, 10)); }
+    document.getElementById("weeklyHead").innerHTML = `<tr><th style="text-align:left; padding-left:25px;">Member</th>${week.map(d => `<th>${d.split('-').slice(1).join('/')}</th>`).join("")}</tr>`;
+    document.getElementById("weeklyBody").innerHTML = MEMBERS.map(m => {
+        const cells = week.map(d => {
+            const h = sessions.filter(s => s.member === m && s.date === d).reduce((a, b) => a + b.hours, 0);
+            return h > 0 ? `<td><span class="weekly-val" style="background:${M_COLORS[m]}18; color:${M_COLORS[m]}">${h.toFixed(1)}h</span></td>` : `<td><span class="weekly-empty">••</span></td>`;
+        }).join("");
+        return `<tr><td style="color:${M_COLORS[m]}">${m}</td>${cells}</tr>`;
+    }).join("");
+}
+
+function setLogFilter(name, btn) {
+    currentFilter = name;
+    document.querySelectorAll('.f-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderLogs();
+}
+
+function switchTab(id, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('sec-' + id).classList.add('active');
+}
+
+async function startTimer() {
+    const topic = document.getElementById("tp-" + ME).value.trim();
+    await db.ref(SKEY + '/timers/' + ME).set({ startISO: new Date().toISOString(), topics: topic, pausedMs: 0, pauseISO: null });
+}
+
+async function togglePause() {
+    const t = timers[ME]; if (!t) return;
+    const wasRunning = !t.pauseISO; // about to pause if currently running
+    let updated = t.pauseISO ? { ...t, pausedMs: (t.pausedMs || 0) + (Date.now() - new Date(t.pauseISO).getTime()), pauseISO: null } : { ...t, pauseISO: new Date().toISOString() };
+    await db.ref(SKEY + '/timers/' + ME).set(updated);
+
+    // Sync Pomodoro if it's bound to this live session
+    if (pomoFirebaseActive) {
+        if (wasRunning && pomoState.running) {
+            // Live was just paused → pause Pomodoro too
+            pomoStop();
+            document.getElementById('pomoStartBtn').textContent = '▶ Resume';
+            document.getElementById('pomoDisplay').classList.remove('running');
+        } else if (!wasRunning && !pomoState.running) {
+            // Live was just resumed → resume Pomodoro too
+            pomoStart();
+            document.getElementById('pomoStartBtn').textContent = '⏸ Pause';
+            document.getElementById('pomoDisplay').classList.add('running');
+        }
+    }
+}
+
+async function stopTimer() {
+    const t = timers[ME]; if (!t) return;
+    const hrs = studyMs(ME) / 3600000;
+    const topic = document.getElementById("tp-" + ME)?.value.trim() || t.topics;
+    await db.ref(SKEY + '/timers/' + ME).remove();
+    if (hrs > 0.01) await db.ref(SKEY + '/sessions').push({ member: ME, date: new Date().toISOString().slice(0, 10), hours: hrs, topics: topic });
+}
+
+function updateQuote() {
+    const q = B_QUOTES[Math.floor(Math.random() * B_QUOTES.length)];
+    const textEl = document.getElementById("quote-text");
+    textEl.style.opacity = 0;
+    setTimeout(() => { textEl.textContent = `"${q.q}"`; document.getElementById("quote-auth").textContent = `— ${q.a}`; textEl.style.opacity = 1; }, 600);
+}
+
+function tick() {
+    document.getElementById("topClock").textContent = new Date().toLocaleTimeString();
+    MEMBERS.forEach(m => {
+        const el = document.getElementById("tdisp-" + m); if (!el || !timers[m]) return;
+        if (isPaused(m)) { el.textContent = msToHMS(currentPauseMs(m)); el.style.color = 'var(--yellow)'; }
+        else { el.textContent = elapsed(m); el.style.color = ''; }
+    });
+}
+
+window.onload = () => {
+    const bar = document.getElementById("loadBar");
+    let pct = 0; const loadInt = setInterval(() => { pct += Math.random() * 15; if (pct > 90) pct = 90; bar.style.width = pct + "%"; }, 200);
+
+    db.ref(SKEY + '/config').once('value').then(async snap => {
+        const config = snap.val();
+        if (!config || !config.members) {
+            const initData = {}; MEMBERS.forEach((name, i) => { initData[name] = { color: M_COLORS[name], order: i, suspended: false }; });
+            await db.ref(SKEY + '/config/members').set(initData);
+        } else {
+            const ordered = Object.entries(config.members).sort((a, b) => (a[1].order || 0) - (b[1].order || 0));
+            MEMBERS.length = 0; Object.keys(M_COLORS).forEach(k => delete M_COLORS[k]);
+            ordered.forEach(([name, cfg]) => { M_COLORS[name] = cfg.color; if (!cfg.suspended) MEMBERS.push(name); });
+        }
+
+        if (ME && !MEMBERS.includes(ME)) { localStorage.removeItem('fw_me'); ME = null; }
+
+        if (!ME && !IS_ADMIN) {
+            setTimeout(() => { clearInterval(loadInt); bar.style.width = "100%"; document.getElementById("loadOverlay").innerHTML = buildSelectionHTML(); }, 800);
+        } else {
+            const fCont = document.getElementById("filterContainer");
+            MEMBERS.forEach(m => { const b = document.createElement("button"); b.className = "f-btn"; b.textContent = m.split(" ")[0]; b.onclick = (e) => setLogFilter(m, e.target); fCont.appendChild(b); });
+            if (ME) { const badge = document.getElementById("userBadge"); badge.textContent = ME.split(" ")[0].toUpperCase(); badge.style.display = 'block'; badge.style.borderColor = M_COLORS[ME] + '60'; badge.style.color = M_COLORS[ME]; }
+            initSync();
+            clearInterval(loadInt); bar.style.width = "100%";
+            setInterval(updateQuote, 15000); setInterval(tick, 1000);
+        }
+    });
+};
+
+// ============================================================
+//  POMODORO — Firebase-backed, fully customisable
+// ============================================================
+const POMO_KEY = SKEY + '/pomodoro';
+// Stored OUTSIDE SKEY so saves never trigger the global feed listener
+const POMO_STATE_KEY = 'fw_pomo_state_v3';
+
+let pomoState = {
+    mode: 'work',          // 'work' | 'short' | 'long'
+    running: false,
+    secondsLeft: 25 * 60,
+    totalSeconds: 25 * 60,
+    workMins: 25,
+    shortMins: 5,
+    longMins: 15,
+    cycles: 4,
+    currentCycle: 0,       // completed work pomodoros in this round
+    interval: null,
+    startTimestamp: null,  // wall-clock anchor for drift-free countdown
+    todayLog: []           // { type, mins, timeStr }
+};
+
+function pomoSecondsForMode(mode) {
+    if (mode === 'work')  return pomoState.workMins  * 60;
+    if (mode === 'short') return pomoState.shortMins * 60;
+    if (mode === 'long')  return pomoState.longMins  * 60;
+    return 25 * 60;
+}
+
+function pomoLabel(mode) {
+    if (mode === 'work')  return 'Focus Time';
+    if (mode === 'short') return 'Short Break';
+    if (mode === 'long')  return 'Long Break';
+    return '';
+}
+
+// ---- CONTINUOUS ALARM ----
+let pomoAlarmInterval = null;
+function pomoPlayBeep() {
+    try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        const ctx = new AC();
+        // Rich bell: strike fundamental + 3 harmonics, three times
+        const bell = (startT) => {
+            [[523, 0.55, 1.4], [1047, 0.28, 0.9], [1568, 0.18, 0.6], [659, 0.22, 1.0]].forEach(([freq, amp, decay]) => {
+                const o = ctx.createOscillator(); const g = ctx.createGain();
+                o.connect(g); g.connect(ctx.destination);
+                o.type = 'sine'; o.frequency.value = freq;
+                g.gain.setValueAtTime(amp, ctx.currentTime + startT);
+                g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startT + decay);
+                o.start(ctx.currentTime + startT); o.stop(ctx.currentTime + startT + decay);
+            });
+        };
+        bell(0); bell(0.6); bell(1.2);
+        setTimeout(() => { try { ctx.close(); } catch(e) {} }, 3000);
+    } catch(e) {}
+}
+function pomoStartAlarm() {
+    pomoPlayBeep();
+    pomoAlarmInterval = setInterval(pomoPlayBeep, 3000);
+}
+function pomoStopAlarm() {
+    if (pomoAlarmInterval) { clearInterval(pomoAlarmInterval); pomoAlarmInterval = null; }
+}
+
+// ---- FIREBASE LIVE SESSION INTEGRATION ----
+let pomoFirebaseActive = false;
+function pomoGetTopic() {
+    return document.getElementById('pomoTopic')?.value.trim() || '🍅 Pomodoro Focus';
+}
+async function pomoTopicChanged() {
+    if (!ME || !pomoFirebaseActive) return;
+    const t = timers[ME]; if (!t || t.pauseISO) return; // only update while live, not paused
+    await db.ref(SKEY + '/timers/' + ME).update({ topics: pomoGetTopic() }).catch(() => {});
+}
+async function pomoFirebaseStart() {
+    if (!ME) return;
+    await db.ref(SKEY + '/timers/' + ME).set({
+        startISO: new Date().toISOString(),
+        topics: pomoGetTopic(),
+        pausedMs: 0, pauseISO: null, isPomodoro: true
+    }).catch(() => {});
+    pomoFirebaseActive = true;
+}
+async function pomoFirebasePause() {
+    if (!ME || !pomoFirebaseActive) return;
+    const t = timers[ME]; if (!t) return;
+    await db.ref(SKEY + '/timers/' + ME).set({ ...t, pauseISO: new Date().toISOString() }).catch(() => {});
+}
+async function pomoFirebaseResume() {
+    if (!ME || !pomoFirebaseActive) return;
+    const t = timers[ME];
+    if (!t) { await pomoFirebaseStart(); return; } // fallback: start fresh if lost
+    const extra = t.pauseISO ? (Date.now() - new Date(t.pauseISO).getTime()) : 0;
+    await db.ref(SKEY + '/timers/' + ME).set({ ...t, pausedMs: (t.pausedMs || 0) + extra, pauseISO: null }).catch(() => {});
+}
+async function pomoFirebaseStop() {
+    if (!ME || !pomoFirebaseActive) return;
+    const hrs = studyMs(ME) / 3600000;
+    const topic = timers[ME]?.topics || pomoGetTopic();
+    await db.ref(SKEY + '/timers/' + ME).remove().catch(() => {});
+    if (hrs > 0.001) {
+        await db.ref(SKEY + '/sessions').push({
+            member: ME, date: new Date().toISOString().slice(0, 10),
+            hours: hrs, topics: topic
+        }).catch(() => {});
+    }
+    pomoFirebaseActive = false;
+}
+
+// ---- PERSIST TIMER STATE ----
+function pomoSaveState() {
+    if (!ME) return;
+    db.ref(POMO_STATE_KEY + '/' + ME).set({
+        mode: pomoState.mode,
+        secondsLeft: pomoState.secondsLeft,
+        totalSeconds: pomoState.totalSeconds,
+        currentCycle: pomoState.currentCycle,
+        running: pomoState.running,
+        savedAt: Date.now()
+    }).catch(() => {});
+}
+
+// ---- CONTROLS ----
+function pomoSetMode(mode) {
+    if (pomoState.running) pomoStop();
+    pomoStopAlarm();
+    pomoState.mode = mode;
+    pomoState.secondsLeft = pomoSecondsForMode(mode);
+    pomoState.totalSeconds = pomoState.secondsLeft;
+    pomoRefreshUI();
+    document.getElementById('pomoDisplay').classList.remove('running');
+    document.getElementById('pomoStartBtn').textContent = '▶ Start';
+    pomoSaveState();
+}
+
+async function pomoToggle() {
+    if (pomoState.running) {
+        pomoStop();
+        document.getElementById('pomoStartBtn').textContent = '▶ Resume';
+        document.getElementById('pomoDisplay').classList.remove('running');
+        // Sync: pause the live session badge too
+        if (pomoState.mode === 'work' && pomoFirebaseActive) {
+            await pomoFirebasePause();
+        }
+        pomoSaveState();
+    } else {
+        pomoStopAlarm(); // always kill alarm when pressing Start
+        if (pomoState.mode === 'work') {
+            if (!pomoFirebaseActive) { await pomoFirebaseStart(); }
+            else { await pomoFirebaseResume(); }
+        }
+        pomoStart();
+        document.getElementById('pomoStartBtn').textContent = '⏸ Pause';
+        document.getElementById('pomoDisplay').classList.add('running');
+        pomoSaveState();
+    }
+}
+
+function pomoStart() {
+    pomoState.running = true;
+    // Anchor to wall clock so the timer never drifts regardless of setInterval jitter
+    pomoState.startTimestamp = Date.now() - ((pomoState.totalSeconds - pomoState.secondsLeft) * 1000);
+    pomoState.interval = setInterval(pomoClock, 250); // 250ms poll — snappy & accurate
+}
+
+function pomoStop() {
+    pomoState.running = false;
+    clearInterval(pomoState.interval);
+    pomoState.interval = null;
+    // Capture exact wall-clock secondsLeft so Resume is always accurate
+    if (pomoState.startTimestamp !== null) {
+        const elapsed = Math.floor((Date.now() - pomoState.startTimestamp) / 1000);
+        pomoState.secondsLeft = Math.max(0, pomoState.totalSeconds - elapsed);
+        pomoState.startTimestamp = null;
+    }
+}
+
+async function pomoReset() {
+    pomoStop();
+    pomoStopAlarm();
+    await pomoFirebaseStop();
+    pomoState.currentCycle = 0;
+    pomoState.mode = 'work';
+    pomoState.secondsLeft = pomoSecondsForMode('work');
+    pomoState.totalSeconds = pomoState.secondsLeft;
+    document.getElementById('pomoDisplay').classList.remove('running');
+    document.getElementById('pomoStartBtn').textContent = '▶ Start';
+    pomoRefreshUI();
+    if (ME) db.ref(POMO_STATE_KEY + '/' + ME).remove().catch(() => {});
+}
+
+function pomoSkip() {
+    pomoStop();
+    pomoComplete(true); // skip = switch mode, no alarm, no log save
+}
+
+function pomoClock() {
+    if (!pomoState.running || pomoState.startTimestamp === null) return;
+    const elapsed = Math.floor((Date.now() - pomoState.startTimestamp) / 1000);
+    const newSecondsLeft = Math.max(0, pomoState.totalSeconds - elapsed);
+
+    // Only re-render when the displayed second actually changes (avoids 4× per second churn)
+    if (newSecondsLeft !== pomoState.secondsLeft) {
+        pomoState.secondsLeft = newSecondsLeft;
+        pomoRefreshUI();
+        // Save state to Firebase every 30 s — path is outside SKEY so it never refreshes the feed
+        if (pomoState.secondsLeft % 30 === 0) pomoSaveState();
+    }
+
+    if (pomoState.secondsLeft <= 0) { pomoComplete(false); }
+}
+
+async function pomoComplete(skipped) {
+    pomoStop();
+    document.getElementById('pomoDisplay').classList.remove('running');
+    const wasWork = pomoState.mode === 'work';
+
+    if (wasWork) {
+        if (!skipped) {
+            pomoState.currentCycle++;
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            pomoState.todayLog.unshift({ type: 'work', mins: pomoState.workMins, timeStr });
+            if (ME) {
+                db.ref(POMO_KEY + '/' + ME).push({
+                    member: ME, date: now.toISOString().slice(0, 10),
+                    type: 'work', workMins: pomoState.workMins, completedAt: now.toISOString()
+                }).catch(() => {});
+            }
+        }
+        await pomoFirebasePause(); // show as PAUSED during break
+    }
+
+    // Decide next mode
+    let nextMode;
+    if (wasWork) {
+        nextMode = (pomoState.currentCycle >= pomoState.cycles) ? 'long' : 'short';
+        if (nextMode === 'long') pomoState.currentCycle = 0;
+    } else {
+        nextMode = 'work'; // break finished → back to Focus (Firebase still paused, waiting for Start)
+    }
+
+    pomoState.mode = nextMode;
+    pomoState.secondsLeft = pomoSecondsForMode(nextMode);
+    pomoState.totalSeconds = pomoState.secondsLeft;
+    document.getElementById('pomoStartBtn').textContent = '▶ Start';
+    pomoRefreshUI();
+    pomoRefreshStats();
+    pomoSaveState();
+
+    if (!skipped) pomoStartAlarm(); // continuous alarm until Start is pressed
+}
+
+function pomoRefreshUI() {
+    const s = pomoState.secondsLeft;
+    const m = Math.floor(s / 60); const sec = s % 60;
+    document.getElementById('pomoDisplay').textContent = pad(m) + ':' + pad(sec);
+    document.getElementById('pomoModeLabel').textContent = pomoLabel(pomoState.mode);
+
+    // Ring progress
+    const ring = document.getElementById('pomoRing');
+    const pct = pomoState.secondsLeft / pomoState.totalSeconds;
+    const circumference = 2 * Math.PI * 90; // 565.5
+    ring.style.strokeDashoffset = circumference * (1 - pct);
+    ring.className = 'pomo-ring-fill' + (pomoState.mode === 'short' ? ' break' : pomoState.mode === 'long' ? ' long-break' : '');
+
+    // Mode buttons
+    ['Work', 'Short', 'Long'].forEach(id => document.getElementById('pmode' + id)?.classList.remove('active'));
+    const modeMap = { work: 'pmodeWork', short: 'pmodeShort', long: 'pomoLong' };
+    document.getElementById(modeMap[pomoState.mode])?.classList.add('active');
+
+    // Dots
+    const dots = document.getElementById('pomoDots');
+    let html = '';
+    for (let i = 0; i < pomoState.cycles; i++) {
+        if (i < pomoState.currentCycle) html += '<div class="pomo-dot done"></div>';
+        else if (i === pomoState.currentCycle && pomoState.mode === 'work' && pomoState.running) html += '<div class="pomo-dot current"></div>';
+        else html += '<div class="pomo-dot"></div>';
+    }
+    dots.innerHTML = html;
+}
+
+function pomoUpdateSettings() {
+    const wm = parseInt(document.getElementById('slWork').value);
+    const sm = parseInt(document.getElementById('slShort').value);
+    const lm = parseInt(document.getElementById('slLong').value);
+    const cy = parseInt(document.getElementById('slCycles').value);
+    document.getElementById('valWork').textContent   = wm + 'm';
+    document.getElementById('valShort').textContent  = sm + 'm';
+    document.getElementById('valLong').textContent   = lm + 'm';
+    document.getElementById('valCycles').textContent = cy;
+    pomoState.workMins  = wm;
+    pomoState.shortMins = sm;
+    pomoState.longMins  = lm;
+    pomoState.cycles    = cy;
+    if (!pomoState.running) {
+        pomoState.secondsLeft = pomoSecondsForMode(pomoState.mode);
+        pomoState.totalSeconds = pomoState.secondsLeft;
+        pomoRefreshUI();
+    }
+    // Persist settings to Firebase (per-user, any device)
+    if (ME) {
+        db.ref(SKEY + '/pomo_settings/' + ME).set({ wm, sm, lm, cy }).catch(() => {});
+    }
+}
+
+function pomoRefreshStats() {
+    const todayLog = pomoState.todayLog;
+    const count = todayLog.filter(e => e.type === 'work').length;
+    const mins  = todayLog.filter(e => e.type === 'work').reduce((a, b) => a + b.mins, 0);
+    document.getElementById('pomoStatPomos').textContent = count;
+    document.getElementById('pomoStatMins').textContent  = mins;
+    const list = document.getElementById('pomoLogList');
+    if (todayLog.length === 0) {
+        list.innerHTML = '<div class="pomo-log-empty">No sessions yet today</div>';
+        return;
+    }
+    list.innerHTML = todayLog.slice(0, 15).map(e =>
+        `<div class="pomo-log-item"><span>🍅 Pomodoro</span><span>${e.mins}min</span><span>${e.timeStr}</span></div>`
+    ).join('');
+}
+
+function pomoLoadFirebaseStats() {
+    if (!ME) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    db.ref(POMO_KEY + '/' + ME).orderByChild('date').equalTo(todayStr).once('value').then(snap => {
+        const val = snap.val();
+        if (!val) return;
+        const entries = Object.values(val);
+        pomoState.todayLog = entries
+            .filter(e => e.type === 'work')
+            .sort((a, b) => b.completedAt.localeCompare(a.completedAt))
+            .map(e => {
+                const t = new Date(e.completedAt);
+                return { type: 'work', mins: e.workMins || pomoState.workMins, timeStr: t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+            });
+        pomoRefreshStats();
+    }).catch(() => {});
+}
+
+// Init Pomodoro on page load
+(function initPomo() {
+    function applyPomoSettings({ wm, sm, lm, cy }) {
+        try {
+            pomoState.workMins = wm; pomoState.shortMins = sm;
+            pomoState.longMins = lm; pomoState.cycles = cy;
+            document.getElementById('slWork').value   = wm;
+            document.getElementById('slShort').value  = sm;
+            document.getElementById('slLong').value   = lm;
+            document.getElementById('slCycles').value = cy;
+            document.getElementById('valWork').textContent   = wm + 'm';
+            document.getElementById('valShort').textContent  = sm + 'm';
+            document.getElementById('valLong').textContent   = lm + 'm';
+            document.getElementById('valCycles').textContent = cy;
+            if (!pomoState.running) {
+                pomoState.secondsLeft  = pomoSecondsForMode(pomoState.mode);
+                pomoState.totalSeconds = pomoState.secondsLeft;
+                pomoRefreshUI();
+            }
+        } catch(e) {}
+    }
+
+    // Load settings from Firebase only
+    function loadPomoSettings() {
+        if (ME) {
+            db.ref(SKEY + '/pomo_settings/' + ME).once('value').then(snap => {
+                const saved = snap.val();
+                if (saved && saved.wm) {
+                    applyPomoSettings(saved);
+                }
+            }).catch(() => {});
+        }
+    }
+
+    pomoState.secondsLeft  = pomoSecondsForMode('work');
+    pomoState.totalSeconds = pomoState.secondsLeft;
+    pomoRefreshUI();
+    loadPomoSettings();
+    pomoLoadFirebaseStats();
+
+    // Restore timer state from Firebase
+    if (ME) {
+        db.ref(POMO_STATE_KEY + '/' + ME).once('value').then(snap => {
+            const saved = snap.val();
+            if (!saved) return;
+            let secondsLeft = saved.secondsLeft || 0;
+            // If it was running when they left, account for real elapsed time
+            if (saved.running && saved.savedAt) {
+                const elapsed = Math.floor((Date.now() - saved.savedAt) / 1000);
+                secondsLeft = Math.max(0, secondsLeft - elapsed);
+            }
+            pomoState.mode         = saved.mode         || 'work';
+            pomoState.secondsLeft  = secondsLeft;
+            pomoState.totalSeconds = saved.totalSeconds || pomoSecondsForMode(pomoState.mode);
+            pomoState.currentCycle = saved.currentCycle || 0;
+            // Never auto-resume; let user press Start
+            pomoState.running = false;
+            if (saved.running || secondsLeft < (saved.totalSeconds || pomoSecondsForMode(pomoState.mode))) {
+                document.getElementById('pomoStartBtn').textContent = '▶ Resume';
+            }
+            pomoRefreshUI();
+            // If timer actually expired while away, fire the complete logic
+            if (secondsLeft <= 0) { pomoComplete(false); }
+        }).catch(() => {});
+    }
+})();
+</script>
+</body>
+</html>
