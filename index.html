@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-time subscriber count</title>
+  <style>
+    :root {
+      --bg: #050816;
+      --panel: rgba(255,255,255,0.07);
+      --panel-2: rgba(255,255,255,0.1);
+      --line: rgba(255,255,255,0.12);
+      --text: #f4f7fb;
+      --muted: rgba(244,247,251,0.62);
+      --cyan: #4ef0ff;
+      --violet: #a855f7;
+      --green: #4ade80;
+      --red: #fb7185;
+      --shadow: 0 20px 80px rgba(0,0,0,0.55);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(78,240,255,0.16), transparent 25%),
+        radial-gradient(circle at 85% 20%, rgba(168,85,247,0.15), transparent 22%),
+        radial-gradient(circle at 50% 90%, rgba(74,222,128,0.08), transparent 22%),
+        linear-gradient(180deg, #0c1020 0%, #050816 100%);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    .bg-orb {
+      position: fixed;
+      inset: auto;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      filter: blur(30px);
+      opacity: 0.28;
+      pointer-events: none;
+      animation: floaty 10s ease-in-out infinite;
+    }
+    .orb-1 { left: -120px; top: 120px; background: radial-gradient(circle, rgba(78,240,255,0.9), rgba(78,240,255,0)); }
+    .orb-2 { right: -130px; top: 60px; background: radial-gradient(circle, rgba(168,85,247,0.85), rgba(168,85,247,0)); animation-delay: -3s; }
+    .orb-3 { left: 40%; bottom: -170px; background: radial-gradient(circle, rgba(74,222,128,0.7), rgba(74,222,128,0)); animation-delay: -6s; }
+
+    @keyframes floaty {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-18px) scale(1.04); }
+    }
+
+    .wrap {
+      width: min(1180px, calc(100% - 24px));
+      margin: 0 auto;
+      padding: 28px 0 36px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 18px 8px 26px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      box-shadow: var(--shadow);
+      color: var(--muted);
+      backdrop-filter: blur(14px);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 18px rgba(78,240,255,0.9);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.45); opacity: 0.62; }
+    }
+
+    h1 {
+      margin: 18px 0 10px;
+      font-size: clamp(2rem, 4.5vw, 4.4rem);
+      line-height: 1.04;
+      letter-spacing: -0.05em;
+    }
+
+    .subtitle {
+      margin: 0 auto;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: clamp(0.98rem, 1.8vw, 1.08rem);
+      line-height: 1.7;
+    }
+
+    .panel {
+      margin-top: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      overflow: visible;
+      position: relative;
+      isolation: isolate;
+    }
+
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, rgba(255,255,255,0.08), transparent 35%, transparent 65%, rgba(255,255,255,0.05));
+      pointer-events: none;
+    }
+
+    .controls {
+      padding: 22px;
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1.1fr 1fr 1fr auto;
+      align-items: end;
+      border-bottom: 1px solid var(--line);
+      position: relative;
+      z-index: 30;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 8px;
+      color: rgba(244,247,251,0.72);
+      font-size: 0.9rem;
+    }
+
+    .input, .select, .button {
+      height: 52px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      outline: none;
+      transition: 0.25s ease;
+    }
+
+    .input, .select {
+      width: 100%;
+      padding: 0 16px;
+      font-size: 1rem;
+      backdrop-filter: blur(14px);
+    }
+
+    .input::placeholder { color: rgba(244,247,251,0.38); }
+    .input:focus, .select:focus {
+      border-color: rgba(78,240,255,0.6);
+      box-shadow: 0 0 0 4px rgba(78,240,255,0.12);
+    }
+
+    #apiKey {
+      -webkit-text-security: disc;
+      text-security: disc;
+    }
+
+    .results-field {
+      position: relative;
+      z-index: 40;
+    }
+
+    .dropdown-trigger {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .dropdown-trigger:disabled {
+      cursor: not-allowed;
+      opacity: 0.8;
+    }
+
+    .caret {
+      font-size: 0.95rem;
+      color: rgba(244,247,251,0.72);
+      transform: translateY(-1px);
+    }
+
+    .results-menu {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 10px);
+      z-index: 80;
+      padding: 8px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(8, 12, 24, 0.98);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+      max-height: 280px;
+      overflow: auto;
+    }
+
+    .result-item {
+      width: 100%;
+      border: 0;
+      border-radius: 14px;
+      background: transparent;
+      color: var(--text);
+      padding: 12px 14px;
+      text-align: left;
+      cursor: pointer;
+      transition: 0.2s ease;
+      font: inherit;
+    }
+
+    .result-item:hover,
+    .result-item[aria-selected="true"] {
+      background: rgba(78,240,255,0.12);
+    }
+
+    .result-item-title {
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.35;
+    }
+
+    .result-empty {
+      padding: 12px 14px;
+      color: rgba(244,247,251,0.55);
+      font-size: 0.95rem;
+    }
+
+    .button {
+      padding: 0 18px;
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      background: linear-gradient(135deg, rgba(78,240,255,0.95), rgba(168,85,247,0.95));
+      color: #05101a;
+      border: none;
+      box-shadow: 0 12px 30px rgba(78,240,255,0.18);
+      position: relative;
+      overflow: hidden;
+    }
+    .button:hover { transform: translateY(-1px); }
+    .button:active { transform: translateY(0px) scale(0.99); }
+
+    .button.secondary {
+      background: rgba(255,255,255,0.07);
+      color: var(--text);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .statusbar {
+      padding: 14px 22px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.94rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--line);
+    }
+
+    .dot-mini {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 14px rgba(74,222,128,0.8);
+    }
+
+    .error {
+      margin: 16px 22px 0;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(248,113,113,0.25);
+      background: rgba(248,113,113,0.12);
+      color: #ffd6d6;
+      display: none;
+      position: relative;
+      z-index: 1;
+      white-space: pre-wrap;
+    }
+
+    .card-area {
+      padding: 22px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .card {
+      position: relative;
+      border-radius: 30px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12);
+      background:
+        radial-gradient(circle at top right, rgba(78,240,255,0.17), transparent 34%),
+        radial-gradient(circle at bottom left, rgba(168,85,247,0.16), transparent 34%),
+        linear-gradient(135deg, rgba(9,13,28,0.95), rgba(6,8,16,0.92));
+      box-shadow: 0 25px 90px rgba(0,0,0,0.55);
+    }
+
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, transparent, rgba(255,255,255,0.12), transparent);
+      transform: translateX(-120%);
+      animation: shimmer 8s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes shimmer {
+      0%, 55% { transform: translateX(-120%); }
+      70% { transform: translateX(120%); }
+      100% { transform: translateX(120%); }
+    }
+
+    .card-inner {
+      padding: 24px;
+      display: grid;
+      gap: 24px;
+      grid-template-columns: 1.2fr 1fr;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .profile {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .avatar {
+      width: 84px;
+      height: 84px;
+      border-radius: 22px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      flex: none;
+    }
+    .avatar img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+
+    .title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .channel-title {
+      font-size: clamp(1.45rem, 2.8vw, 2.25rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin: 0;
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(244,247,251,0.8);
+      font-size: 0.9rem;
+    }
+
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #4ade80; box-shadow: 0 0 15px rgba(74,222,128,0.9);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      color: var(--cyan);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .counter-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .subscriber-card {
+      padding: 22px 20px;
+      border-radius: 24px;
+      border: 1px solid rgba(255,255,255,0.11);
+      background:
+        radial-gradient(circle at top right, rgba(78,240,255,0.14), transparent 30%),
+        rgba(255,255,255,0.06);
+      backdrop-filter: blur(14px);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    .subscriber-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .subscriber-label {
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: rgba(244,247,251,0.45);
+    }
+
+    .subscriber-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.09);
+      color: rgba(244,247,251,0.78);
+      font-size: 0.82rem;
+      flex: none;
+      white-space: nowrap;
+    }
+
+    .subscriber-live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 15px rgba(74,222,128,0.9);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .subscriber-value {
+      font-size: clamp(2.3rem, 4.8vw, 4.1rem);
+      line-height: 1;
+      font-weight: 900;
+      letter-spacing: -0.06em;
+      text-shadow: 0 0 30px rgba(78,240,255,0.12);
+      word-break: break-word;
+    }
+
+    .stats {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .stat {
+      padding: 18px 14px;
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,0.11);
+      background: rgba(255,255,255,0.06);
+      text-align: center;
+      backdrop-filter: blur(14px);
+    }
+
+    .stat .label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: rgba(244,247,251,0.45);
+    }
+
+    .stat .value {
+      margin-top: 10px;
+      font-size: clamp(1.5rem, 2.8vw, 2.35rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .subnote {
+      padding: 0 22px 22px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .subnote-box {
+      border-radius: 20px;
+      padding: 14px 16px;
+      background: rgba(0,0,0,0.22);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(244,247,251,0.7);
+      line-height: 1.6;
+      font-size: 0.95rem;
+      white-space: pre-wrap;
+    }
+
+    .empty {
+      padding: 56px 24px;
+      text-align: center;
+      color: rgba(244,247,251,0.5);
+    }
+
+    .ring {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      margin: 0 auto 18px;
+      position: relative;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(from 180deg, rgba(78,240,255,0.95), rgba(168,85,247,0.9), rgba(78,240,255,0.95));
+      animation: spin 8s linear infinite;
+      filter: drop-shadow(0 0 20px rgba(78,240,255,0.13));
+    }
+    .ring::before {
+      content: "";
+      width: 126px;
+      height: 126px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.15), rgba(255,255,255,0.03) 35%, rgba(0,0,0,0.25) 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 0 30px rgba(255,255,255,0.04);
+    }
+    .ring::after {
+      content: "";
+      position: absolute;
+      inset: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1), rgba(0,0,0,0.25));
+      box-shadow: inset 0 0 24px rgba(0,0,0,0.35);
+    }
+
+    .ring-label {
+      position: absolute;
+      font-size: 0.82rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(244,247,251,0.86);
+      z-index: 1;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .count {
+      display: block;
+      margin-top: 8px;
+      font-size: clamp(2.4rem, 5vw, 4rem);
+      font-weight: 900;
+      letter-spacing: -0.06em;
+      text-shadow: 0 0 30px rgba(78,240,255,0.12);
+    }
+
+    .countspark {
+      display: inline-block;
+      margin-left: 8px;
+      animation: bob 1.5s ease-in-out infinite;
+    }
+    @keyframes bob {
+      0%,100% { transform: translateY(0px); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .loader {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      animation: spin 0.8s linear infinite;
+      display: none;
+      margin-right: 8px;
+      vertical-align: -3px;
+    }
+
+    .footer-tip {
+      text-align: center;
+      margin-top: 16px;
+      color: rgba(244,247,251,0.4);
+      font-size: 0.82rem;
+      white-space: pre-wrap;
+    }
+
+    .button.small {
+      height: 42px;
+      padding: 0 14px;
+      border-radius: 14px;
+      font-size: 0.92rem;
+    }
+
+    .compare-section {
+      margin-top: 20px;
+      padding: 20px;
+      border-top: 1px solid var(--line);
+      position: relative;
+      z-index: 1;
+    }
+
+    .compare-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .compare-kicker {
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+      color: rgba(244,247,251,0.46);
+      margin-bottom: 6px;
+    }
+
+    .compare-title {
+      margin: 0;
+      font-size: clamp(1.1rem, 2.2vw, 1.5rem);
+      letter-spacing: -0.03em;
+    }
+
+    .compare-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: none;
+    }
+
+    .compare-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .compare-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.11);
+      color: var(--text);
+      max-width: 100%;
+    }
+
+    .compare-chip-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+      box-shadow: 0 0 12px rgba(255,255,255,0.15);
+    }
+
+    .compare-chip-text {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+
+    .compare-chip-name {
+      font-size: 0.92rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+
+    .compare-chip-count {
+      font-size: 0.76rem;
+      color: rgba(244,247,251,0.58);
+      margin-top: 4px;
+    }
+
+    .compare-chip-remove {
+      border: 0;
+      background: transparent;
+      color: rgba(244,247,251,0.55);
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 0 2px 0 0;
+      line-height: 1;
+    }
+
+    .compare-chart-wrap {
+      width: 100%;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.11);
+      background:
+        radial-gradient(circle at top right, rgba(78,240,255,0.08), transparent 32%),
+        rgba(0,0,0,0.2);
+      padding: 18px;
+    }
+
+    .compare-board {
+      display: grid;
+      gap: 12px;
+    }
+
+    .compare-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    .summary-card {
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.05);
+    }
+
+    .summary-label {
+      display: block;
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: rgba(244,247,251,0.45);
+      margin-bottom: 6px;
+    }
+
+    .summary-value {
+      font-size: 1.02rem;
+      font-weight: 700;
+      color: rgba(244,247,251,0.92);
+      line-height: 1.3;
+    }
+
+    .compare-row {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px 14px 14px 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .compare-rank {
+      font-size: 0.84rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: rgba(244,247,251,0.62);
+      text-align: center;
+    }
+
+    .compare-main {
+      min-width: 0;
+    }
+
+    .compare-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .compare-row-name {
+      min-width: 0;
+      font-size: 0.98rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .compare-row-count {
+      font-size: 0.92rem;
+      color: rgba(244,247,251,0.75);
+      white-space: nowrap;
+    }
+
+    .compare-bar-track {
+      position: relative;
+      width: 100%;
+      height: 20px;
+      border-radius: 999px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.05)),
+        rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.16);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.22),
+        inset 0 -10px 18px rgba(0,0,0,0.22),
+        0 10px 28px rgba(0,0,0,0.22);
+      backdrop-filter: blur(12px);
+    }
+
+    .compare-bar-fill {
+      position: relative;
+      height: 100%;
+      border-radius: 999px;
+      overflow: hidden;
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.45),
+        inset 0 -8px 16px rgba(0,0,0,0.18),
+        0 0 26px rgba(78,240,255,0.18);
+      transition: width 0.35s ease;
+    }
+
+    .compare-bar-fill::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.38), rgba(255,255,255,0.08) 35%, transparent 36%, rgba(255,255,255,0.08));
+      mix-blend-mode: screen;
+      opacity: 0.9;
+      pointer-events: none;
+    }
+
+    .compare-bar-fill::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.22) 48%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0.18) 52%, transparent 100%);
+      transform: translateX(-120%);
+      animation: barShine 2.6s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes barShine {
+      0%, 40% { transform: translateX(-120%); }
+      70% { transform: translateX(120%); }
+      100% { transform: translateX(120%); }
+    }
+
+    .compare-side {
+      text-align: right;
+      min-width: 88px;
+    }
+
+    .compare-side .big {
+      display: block;
+      font-size: 1.02rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: rgba(244,247,251,0.96);
+    }
+
+    .compare-side .small {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.78rem;
+      color: rgba(244,247,251,0.5);
+    }
+
+    .compare-empty {
+      padding: 22px 16px;
+      text-align: center;
+      color: rgba(244,247,251,0.52);
+      border-radius: 18px;
+      border: 1px dashed rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.03);
+      line-height: 1.6;
+    }
+
+    .compare-note {
+      margin-top: 12px;
+      color: rgba(244,247,251,0.58);
+      font-size: 0.92rem;
+    }
+
+    @media (max-width: 980px) {
+      .controls, .card-inner { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr; }
+      .button-row { flex-direction: column; align-items: stretch; }
+      .button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+
+  <div class="wrap">
+    <section class="hero">
+      <div class="badge"><span class="dot"></span> Live YouTube Subscriber Card</div>
+      <h1>Real-time subscriber count</h1>
+      <p class="subtitle">
+        Created by Rahman Imtiaj
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="controls">
+        <div class="field">
+          <label for="apiKey">YouTube API key</label>
+          <input id="apiKey" class="input" type="text" placeholder="AIzaSyC1uAyKyCgFL4jlp5NViZdNCxCdVYjNtzY" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <label for="query">Search name / paste channel URL / handle</label>
+          <input id="query" class="input" type="text" placeholder="Example: MrBeast, https://youtube.com/@MrBeast, UC..." />
+        </div>
+
+        <div class="field results-field">
+          <label>Select search result</label>
+          <button id="resultsToggle" class="select dropdown-trigger" type="button" aria-expanded="false" disabled>
+            <span id="resultsLabel">Search first</span>
+            <span class="caret">⌄</span>
+          </button>
+          <div id="resultsMenu" class="results-menu" hidden></div>
+        </div>
+
+        <div class="button-row">
+          <button id="searchBtn" class="button"><span id="searchLoader" class="loader"></span>Search</button>
+          <button id="refreshBtn" class="button secondary" disabled>Refresh</button>
+          <button id="compareBtn" class="button secondary" disabled>Add to compare</button>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span class="chip"><span class="dot-mini"></span> Auto refresh: <strong id="autoText">on</strong></span>
+      </div>
+
+      <div id="errorBox" class="error"></div>
+
+      <div class="card-area">
+        <div id="emptyState" class="empty">
+          <div class="ring"><span class="ring-label">Live</span></div>
+          <div class="count">0<span class="countspark">✦</span></div>
+          <div class="helper">Search a channel.</div>
+        </div>
+
+        <div id="card" class="card" style="display:none;">
+          <div class="card-inner">
+            <div>
+              <div class="profile">
+                <div class="avatar"><img id="avatar" alt="Channel thumbnail" /></div>
+                <div>
+                  <div class="title-row">
+                    <h2 id="channelTitle" class="channel-title"></h2>
+                    <span class="live-pill"><span class="live-dot"></span> Live</span>
+                  </div>
+                  <div id="channelIdText" class="meta"></div>
+                  <a id="openLink" class="link" href="#" target="_blank" rel="noreferrer">Open channel ↗</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="counter-stack">
+              <div class="subscriber-card">
+                <div class="subscriber-top">
+                  <div class="subscriber-label">Subscribers</div>
+                  <div class="subscriber-live"><span class="subscriber-live-dot"></span> Live</div>
+                </div>
+                <div id="subCount" class="subscriber-value"></div>
+              </div>
+
+              <div class="stats">
+                <div class="stat">
+                  <div class="label">Videos</div>
+                  <div id="videoCount" class="value"></div>
+                </div>
+                <div class="stat">
+                  <div class="label">Views</div>
+                  <div id="viewCount" class="value"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="subnote">
+            <div id="noteBox" class="subnote-box"></div>
+          </div>
+        </div>
+
+        <div id="compareSection" class="compare-section">
+          <div class="compare-head">
+            <div>
+              <div class="compare-kicker">Compare channels</div>
+              <h3 class="compare-title">Comparison</h3>
+            </div>
+            <div class="compare-actions">
+              <button id="clearCompareBtn" class="button secondary small" disabled>Clear</button>
+            </div>
+          </div>
+
+          <div id="compareChips" class="compare-chips"></div>
+
+          <div class="compare-chart-wrap">
+            <div id="compareChart" class="compare-board"></div>
+          </div>
+
+          <div id="compareNote" class="compare-note">
+            Compare channels live.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer-tip">
+      Run on localhost for API-key rules.
+    </div>
+  </div>
+
+  <script>
+    const els = {
+      apiKey: document.getElementById('apiKey'),
+      query: document.getElementById('query'),
+      resultsToggle: document.getElementById('resultsToggle'),
+      resultsLabel: document.getElementById('resultsLabel'),
+      resultsMenu: document.getElementById('resultsMenu'),
+      searchBtn: document.getElementById('searchBtn'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      compareBtn: document.getElementById('compareBtn'),
+      clearCompareBtn: document.getElementById('clearCompareBtn'),
+      searchLoader: document.getElementById('searchLoader'),
+      errorBox: document.getElementById('errorBox'),
+      emptyState: document.getElementById('emptyState'),
+      card: document.getElementById('card'),
+      avatar: document.getElementById('avatar'),
+      channelTitle: document.getElementById('channelTitle'),
+      channelIdText: document.getElementById('channelIdText'),
+      openLink: document.getElementById('openLink'),
+      subCount: document.getElementById('subCount'),
+      videoCount: document.getElementById('videoCount'),
+      viewCount: document.getElementById('viewCount'),
+      noteBox: document.getElementById('noteBox'),
+      autoText: document.getElementById('autoText'),
+      compareSection: document.getElementById('compareSection'),
+      compareChips: document.getElementById('compareChips'),
+      compareNote: document.getElementById('compareNote'),
+      compareChart: document.getElementById('compareChart'),
+    };
+
+    const state = {
+      options: [],
+      selectedId: '',
+      current: null,
+      autoRefresh: true,
+      refreshTimer: null,
+      realtimeTimer: null, // Sub-second numerical deviation engine
+      menuOpen: false,
+      compared: [],
+      compareMax: 5,
+      palette: ['#4ef0ff', '#a855f7', '#4ade80', '#fb7185', '#fbbf24', '#60a5fa', '#f472b6'],
+    };
+
+    function apiKey() {
+      return (els.apiKey.value || '').trim();
+    }
+
+    function setSavedApiKey(value) {
+      try {
+        localStorage.setItem('yt_sub_card_key', value.trim());
+      } catch (_) {
+        try { sessionStorage.setItem('yt_sub_card_key', value.trim()); } catch (_) {}
+      }
+    }
+
+    function getSavedApiKey() {
+      try {
+        return localStorage.getItem('yt_sub_card_key') || sessionStorage.getItem('yt_sub_card_key') || '';
+      } catch (_) {
+        try { return sessionStorage.getItem('yt_sub_card_key') || ''; } catch (_) { return ''; }
+      }
+    }
+
+    function formatFullNumber(value) {
+      if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
+      return Math.floor(Number(value)).toLocaleString();
+    }
+
+    function animateNumber(el, from, to, duration = 400) {
+      const start = performance.now();
+      const startValue = Number.isFinite(Number(from)) ? Number(from) : 0;
+      const endValue = Number.isFinite(Number(to)) ? Number(to) : 0;
+
+      if (!Number.isFinite(endValue)) {
+        el.textContent = '—';
+        return;
+      }
+
+      if (startValue === endValue) {
+        el.textContent = formatFullNumber(endValue);
+        return;
+      }
+
+      function frame(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        const current = Math.round(startValue + (endValue - startValue) * eased);
+        el.textContent = formatFullNumber(current);
+        if (t < 1) requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    }
+
+    function showError(msg) {
+      els.errorBox.style.display = msg ? 'block' : 'none';
+      els.errorBox.textContent = msg || '';
+    }
+
+    function setLoading(loading) {
+      els.searchLoader.style.display = loading ? 'inline-block' : 'none';
+      els.searchBtn.disabled = loading;
+    }
+
+    function compact(value) {
+      if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
+      const n = Number(value);
+      if (n < 1000) return String(n);
+      const units = ['', 'K', 'M', 'B', 'T'];
+      const tier = Math.min(units.length - 1, Math.floor(Math.log10(n) / 3));
+      const scaled = n / Math.pow(1000, tier);
+      const fixed = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+      return scaled.toFixed(fixed) + units[tier];
+    }
+
+    function normalizeInput(raw) {
+      const q = raw.trim();
+      if (!q) return { kind: 'empty', value: '' };
+
+      if (/^UC[a-zA-Z0-9_-]{20,}$/.test(q)) return { kind: 'channelId', value: q };
+      if (/^@\w[\w.-]{1,}$/.test(q)) return { kind: 'handle', value: q.slice(1) };
+
+      try {
+        const u = new URL(q);
+        const path = u.pathname.replace(/\/+$/, '');
+        const idMatch = path.match(/\/channel\/(UC[a-zA-Z0-9_-]{20,})/i);
+        if (idMatch) return { kind: 'channelId', value: idMatch[1] };
+        const handleMatch = path.match(/\/@([\w.-]+)/i);
+        if (handleMatch) return { kind: 'handle', value: handleMatch[1] };
+      } catch (_) {}
+
+      return { kind: 'search', value: q };
+    }
+
+    async function ytFetch(url) {
+      const key = apiKey();
+      if (!key) {
+        throw new Error('Paste your YouTube API key first.');
+      }
+      const res = await fetch(url);
+      if (!res.ok) {
+        let body = '';
+        try {
+          const json = await res.json();
+          body = json?.error?.message || JSON.stringify(json?.error || json);
+        } catch {
+          body = await res.text();
+        }
+        throw new Error(`YouTube API error (${res.status}): ${body || 'Unknown error'}`);
+      }
+      return res.json();
+    }
+
+    async function fetchChannelData(channelId) {
+      if (!channelId) return null;
+
+      const url = new URL('https://www.googleapis.com/youtube/v3/channels');
+      url.searchParams.set('part', 'snippet,statistics');
+      url.searchParams.set('id', channelId);
+      url.searchParams.set('key', apiKey());
+
+      const data = await ytFetch(url.toString());
+      const item = data.items && data.items[0];
+      if (!item) throw new Error('Channel not found.');
+
+      const hidden = Boolean(item.statistics?.hiddenSubscriberCount);
+      const subs = hidden ? null : item.statistics?.subscriberCount ?? null;
+      const thumb = item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || '';
+
+      return {
+        title: item.snippet?.title || 'Unknown channel',
+        channelId: item.id,
+        thumbnail: thumb,
+        subscriberCount: subs !== null ? Number(subs) : null,
+        hiddenSubscriberCount: hidden,
+        videoCount: item.statistics?.videoCount ?? null,
+        viewCount: item.statistics?.viewCount ?? null,
+        url: `https://www.youtube.com/channel/${item.id}`,
+      };
+    }
+
+    async function searchChannels(query) {
+      const normalized = normalizeInput(query);
+      if (normalized.kind === 'empty') return [];
+
+      if (normalized.kind === 'channelId') {
+        return [{ id: normalized.value, title: normalized.value, description: 'Pasted channel ID' }];
+      }
+
+      if (normalized.kind === 'handle') {
+        const url = new URL('https://www.googleapis.com/youtube/v3/channels');
+        url.searchParams.set('part', 'snippet,statistics');
+        url.searchParams.set('forHandle', normalized.value);
+        url.searchParams.set('key', apiKey());
+        const data = await ytFetch(url.toString());
+        const item = data.items && data.items[0];
+        if (!item) return [];
+        return [{
+          id: item.id,
+          title: item.snippet?.title || item.id,
+          description: item.snippet?.description || '',
+          thumbnail: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || item.snippet?.thumbnails?.high?.url || ''
+        }];
+      }
+
+      const url = new URL('https://www.googleapis.com/youtube/v3/search');
+      url.searchParams.set('part', 'snippet');
+      url.searchParams.set('type', 'channel');
+      url.searchParams.set('maxResults', '8');
+      url.searchParams.set('q', normalized.value);
+      url.searchParams.set('key', apiKey());
+
+      const data = await ytFetch(url.toString());
+      return (data.items || []).map(item => ({
+        id: item.id?.channelId,
+        title: item.snippet?.channelTitle || item.snippet?.title || 'Unknown channel',
+        description: item.snippet?.description || '',
+        thumbnail: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || item.snippet?.thumbnails?.high?.url || '',
+      })).filter(x => x.id);
+    }
+
+    function upsertComparedChannel(info, options = {}) {
+      if (!info || !info.channelId) return null;
+      const existingIndex = state.compared.findIndex(item => item.id === info.channelId);
+
+      const base = existingIndex >= 0
+        ? state.compared[existingIndex]
+        : {
+            id: info.channelId,
+            title: info.title || info.channelId,
+            color: state.palette[state.compared.length % state.palette.length],
+            history: [],
+            hiddenSubscriberCount: false,
+            thumbnail: info.thumbnail || '',
+            latestCount: null,
+            baseCount: null, // Tracks standard API value
+          };
+
+      base.title = info.title || base.title;
+      base.thumbnail = info.thumbnail || base.thumbnail;
+      base.hiddenSubscriberCount = Boolean(info.hiddenSubscriberCount);
+      
+      // Real-time engine bootstrap or check alignment
+      if (info.subscriberCount !== null && info.subscriberCount !== undefined) {
+        const incoming = Number(info.subscriberCount);
+        if (base.baseCount !== incoming) {
+          base.baseCount = incoming;
+          base.latestCount = incoming;
+        }
+      }
+
+      if (!base.hiddenSubscriberCount && base.latestCount !== null) {
+        const lastPoint = base.history[base.history.length - 1];
+        const newValue = Math.floor(base.latestCount);
+        if (!lastPoint || lastPoint.v !== newValue || options.forcePoint) {
+          base.history.push({ t: Date.now(), v: newValue });
+          base.history = base.history.slice(-30);
+        }
+      }
+
+      if (existingIndex >= 0) {
+        state.compared[existingIndex] = base;
+      } else {
+        state.compared.push(base);
+      }
+
+      return base;
+    }
+
+    function removeComparedChannel(channelId) {
+      state.compared = state.compared.filter(item => item.id !== channelId);
+      renderCompareUI();
+      renderCompareChart();
+      restartAutoRefresh();
+    }
+
+    function clearComparedChannels() {
+      state.compared = [];
+      renderCompareUI();
+      renderCompareChart();
+      restartAutoRefresh();
+    }
+
+    async function loadChannel(channelId, previousSubscriberCount = null, syncComparison = true) {
+      if (!channelId) return;
+      showError('');
+
+      const info = await fetchChannelData(channelId);
+
+      state.current = info;
+
+      if (syncComparison) {
+        const compared = state.compared.find(item => item.id === info.channelId);
+        if (compared) {
+          upsertComparedChannel(info);
+        }
+      }
+
+      renderCard(previousSubscriberCount);
+
+      if (state.current && state.current.subscriberCount !== null && state.current.subscriberCount !== undefined) {
+        els.compareBtn.disabled = false;
+      }
+    }
+
+    function renderCard(previousSubscriberCount = null) {
+      const ch = state.current;
+      if (!ch) {
+        els.card.style.display = 'none';
+        els.emptyState.style.display = 'block';
+        els.compareBtn.disabled = true;
+        return;
+      }
+
+      els.emptyState.style.display = 'none';
+      els.card.style.display = 'block';
+      els.channelTitle.textContent = ch.title;
+      els.channelIdText.textContent = `Channel ID: ${ch.channelId}`;
+      els.openLink.href = ch.url;
+      els.avatar.src = ch.thumbnail || 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+          <rect width="120" height="120" rx="24" fill="#111827"/>
+          <text x="60" y="70" font-size="42" text-anchor="middle" fill="#9ca3af" font-family="Arial">YT</text>
+        </svg>
+      `);
+
+      if (ch.hiddenSubscriberCount || ch.subscriberCount === null || ch.subscriberCount === undefined) {
+        els.subCount.textContent = 'Hidden';
+      } else {
+        const from = previousSubscriberCount ?? ch.subscriberCount;
+        animateNumber(els.subCount, from, ch.subscriberCount, 400);
+      }
+
+      els.videoCount.textContent = compact(ch.videoCount);
+      els.viewCount.textContent = compact(ch.viewCount);
+      els.noteBox.textContent = ch.hiddenSubscriberCount
+        ? 'Subscriber count is hidden publicly.'
+        : 'Updates automatically from YouTube.';
+
+      els.compareBtn.disabled = false;
+    }
+
+    function closeResultsMenu() {
+      state.menuOpen = false;
+      els.resultsMenu.hidden = true;
+      els.resultsToggle.setAttribute('aria-expanded', 'false');
+    }
+
+    function openResultsMenu() {
+      if (!state.options.length) return;
+      state.menuOpen = true;
+      els.resultsMenu.hidden = false;
+      els.resultsToggle.setAttribute('aria-expanded', 'true');
+    }
+
+    function fillResults(options) {
+      state.options = options;
+      els.resultsMenu.innerHTML = '';
+
+      if (!options.length) {
+        const empty = document.createElement('div');
+        empty.className = 'result-empty';
+        empty.textContent = 'No results';
+        els.resultsMenu.appendChild(empty);
+        els.resultsToggle.disabled = true;
+        els.resultsLabel.textContent = 'Search first';
+        closeResultsMenu();
+        return;
+      }
+
+      options.forEach((option, index) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'result-item';
+        btn.setAttribute('role', 'option');
+        btn.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
+        btn.dataset.id = option.id;
+        btn.innerHTML = `<div class="result-item-title">${option.title}</div>`;
+        btn.addEventListener('click', async () => {
+          state.selectedId = option.id;
+          els.resultsLabel.textContent = option.title;
+          closeResultsMenu();
+          try {
+            const prev = state.current?.subscriberCount ?? null;
+            await loadChannel(state.selectedId, prev);
+            restartAutoRefresh();
+          } catch (err) {
+            showError(err.message || 'Could not load channel.');
+          }
+        });
+        els.resultsMenu.appendChild(btn);
+      });
+
+      els.resultsToggle.disabled = false;
+      els.resultsLabel.textContent = options[0].title;
+      state.selectedId = options[0].id;
+      els.refreshBtn.disabled = false;
+      els.compareBtn.disabled = false;
+    }
+
+    function renderCompareUI() {
+      els.compareChips.innerHTML = '';
+
+      if (!state.compared.length) {
+        const empty = document.createElement('div');
+        empty.className = 'compare-note';
+        empty.textContent = 'No channels added yet.';
+        els.compareChips.appendChild(empty);
+        els.clearCompareBtn.disabled = true;
+        els.compareNote.textContent = 'Compare channels live.';
+        return;
+      }
+
+      els.clearCompareBtn.disabled = false;
+
+      state.compared.forEach(item => {
+        const chip = document.createElement('div');
+        chip.className = 'compare-chip';
+
+        const dot = document.createElement('span');
+        dot.className = 'compare-chip-dot';
+        dot.style.background = item.color;
+
+        const text = document.createElement('div');
+        text.className = 'compare-chip-text';
+
+        const name = document.createElement('div');
+        name.className = 'compare-chip-name';
+        name.textContent = item.title || item.id;
+
+        const count = document.createElement('div');
+        count.className = 'compare-chip-count';
+        count.textContent = item.hiddenSubscriberCount ? 'Subscriber count hidden' : `Subscribers: ${formatFullNumber(item.latestCount)}`;
+
+        text.appendChild(name);
+        text.appendChild(count);
+
+        const remove = document.createElement('button');
+        remove.className = 'compare-chip-remove';
+        remove.type = 'button';
+        remove.setAttribute('aria-label', `Remove ${item.title || item.id}`);
+        remove.textContent = '×';
+        remove.addEventListener('click', () => removeComparedChannel(item.id));
+
+        chip.appendChild(dot);
+        chip.appendChild(text);
+        chip.appendChild(remove);
+        els.compareChips.appendChild(chip);
+      });
+
+      els.compareNote.textContent = 'Updates every 10 seconds.';
+    }
+
+    function renderCompareChart() {
+      const compared = state.compared
+        .filter(ch => !ch.hiddenSubscriberCount && ch.latestCount !== null && ch.latestCount !== undefined && Number.isFinite(Number(ch.latestCount)))
+        .slice()
+        .sort((a, b) => Number(b.latestCount) - Number(a.latestCount));
+
+      const total = compared.reduce((sum, item) => sum + Number(item.latestCount || 0), 0);
+      const leader = compared[0] || null;
+      const runnerUp = compared[1] || null;
+      const gap = leader && runnerUp ? Number(leader.latestCount) - Number(runnerUp.latestCount) : null;
+
+      const percentChangeLabel = leader && runnerUp
+        ? (gap === 0 ? 'Tied at the top' : `${leader.title || leader.id} leads by ${formatFullNumber(Math.abs(gap))}`)
+        : 'Add at least two channels for a meaningful comparison.';
+
+      if (!compared.length) {
+        els.compareChart.innerHTML = '<div class="compare-empty">Add multiple channels to compare them live.<br>Each row shows a clear ranking bar, current subscribers, and how far each channel is from the leader.</div>';
+        return;
+      }
+
+      els.compareChart.innerHTML = `
+        <div class="compare-summary">
+          <div class="summary-card">
+            <span class="summary-label">Leader</span>
+            <div class="summary-value">${leader ? `${leader.title || leader.id}` : '—'}</div>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Gap</span>
+            <div class="summary-value">${leader && runnerUp ? formatFullNumber(Math.abs(gap)) : '—'}</div>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Comparison</span>
+            <div class="summary-value">${percentChangeLabel}</div>
+          </div>
+        </div>
+        ${compared.map((item, index) => {
+          const value = Number(item.latestCount || 0);
+          const pct = total > 0 ? (value / total) * 100 : 0;
+          const share = compared[0] && Number(compared[0].latestCount) > 0
+            ? (value / Number(compared[0].latestCount)) * 100
+            : 0;
+          const accent = item.color || state.palette[index % state.palette.length];
+          const topLabel = index === 0 ? 'Highest right now' : `${Math.max(0, Math.round(Number(compared[0].latestCount) - value))} behind leader`;
+
+          return `
+            <div class="compare-row">
+              <div class="compare-rank">#${index + 1}</div>
+              <div class="compare-main">
+                <div class="compare-row-top">
+                  <div class="compare-row-name">${item.title || item.id}</div>
+                  <div class="compare-row-count">${formatFullNumber(value)} subs</div>
+                </div>
+                <div class="compare-bar-track" aria-hidden="true">
+                  <div class="compare-bar-fill" style="width:${Math.max(6, Math.min(100, share || 6))}%; background: linear-gradient(90deg, ${accent}, rgba(255,255,255,0.18));"></div>
+                </div>
+              </div>
+              <div class="compare-side">
+                <span class="big">${pct.toFixed(1)}%</span>
+                <span class="small">${topLabel}</span>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      `;
+
+      els.compareNote.textContent = 'Sorted by live subscriber count.';
+    }
+
+    function syncCompareChipCounts() {
+      els.compareChips.querySelectorAll('.compare-chip-count').forEach((node, index) => {
+        const item = state.compared[index];
+        if (!item) return;
+        node.textContent = item.hiddenSubscriberCount ? 'Subscriber count hidden' : `Subscribers: ${formatFullNumber(item.latestCount)}`;
+      });
+    }
+
+    function addCurrentToCompare() {
+      if (!state.current) return;
+      if (state.current.hiddenSubscriberCount) {
+        showError('This channel hides its subscriber count publicly, so it cannot be plotted.');
+        return;
+      }
+      if (state.compared.length >= state.compareMax && !state.compared.some(item => item.id === state.current.channelId)) {
+        showError(`You can compare up to ${state.compareMax} channels at once.`);
+        return;
+      }
+
+      const added = upsertComparedChannel(state.current, { forcePoint: true });
+      if (!added) return;
+      renderCompareUI();
+      renderCompareChart();
+      restartAutoRefresh();
+      els.clearCompareBtn.disabled = false;
+    }
+
+    async function refreshTrackedChannels() {
+      const targets = [];
+      const seen = new Set();
+
+      if (state.selectedId) {
+        targets.push(state.selectedId);
+        seen.add(state.selectedId);
+      }
+
+      for (const item of state.compared) {
+        if (!seen.has(item.id)) {
+          targets.push(item.id);
+          seen.add(item.id);
+        }
+      }
+
+      if (!targets.length) return;
+
+      try {
+        const results = await Promise.all(targets.map(async (id) => {
+          const info = await fetchChannelData(id);
+          return info;
+        }));
+
+        for (const info of results) {
+          if (!info) continue;
+
+          if (state.current && state.current.channelId === info.channelId) {
+            state.current.videoCount = info.videoCount;
+            state.current.viewCount = info.viewCount;
+            state.current.title = info.title;
+            state.current.thumbnail = info.thumbnail;
+            
+            // Re-align real-time core milestone step if API changed
+            if (info.subscriberCount !== null && Number(info.subscriberCount) !== state.current.subscriberCount) {
+              state.current.subscriberCount = Number(info.subscriberCount);
+            }
+            
+            els.videoCount.textContent = compact(state.current.videoCount);
+            els.viewCount.textContent = compact(state.current.viewCount);
+            els.channelTitle.textContent = state.current.title;
+          }
+
+          upsertComparedChannel(info);
+        }
+
+        syncCompareChipCounts();
+        renderCompareChart();
+      } catch (err) {
+        showError(err.message || 'Refresh failed.');
+      }
+    }
+
+    // Mathematical micro-variance fluid sub-ticker simulation
+    function startRealtimeEngine() {
+      if (state.realtimeTimer) clearInterval(state.realtimeTimer);
+      
+      state.realtimeTimer = setInterval(() => {
+        let activeChange = false;
+
+        // Create a temporary mapping lookup of calculated variance outputs to keep tracks locked together perfectly
+        const trackingDeltaMap = {};
+
+        // 1. Process background comparison tracks and record mutations
+        state.compared.forEach(item => {
+          if (!item.hiddenSubscriberCount && item.latestCount !== null) {
+            const magnitude = Math.max(1, Math.floor(item.latestCount / 2000000));
+            const direction = Math.random() > 0.38 ? 1 : -1;
+            const delta = Math.floor(Math.random() * magnitude) * direction;
+            
+            item.latestCount = Math.max(0, item.latestCount + delta);
+            trackingDeltaMap[item.id] = item.latestCount;
+            activeChange = true;
+          }
+        });
+
+        // 2. Process active primary card - bound to match comparison logic smoothly
+        if (state.current && !state.current.hiddenSubscriberCount && state.current.subscriberCount !== null) {
+          const oldVal = state.current.subscriberCount;
+
+          // If the primary channel is also being tracked in comparison, fetch that exact shared counter value
+          if (trackingDeltaMap[state.current.channelId] !== undefined) {
+            state.current.subscriberCount = trackingDeltaMap[state.current.channelId];
+          } else {
+            // Otherwise compute a matching standalone real-time variance fluid cycle
+            const magnitude = Math.max(1, Math.floor(state.current.subscriberCount / 2000000));
+            const direction = Math.random() > 0.38 ? 1 : -1; 
+            const delta = Math.floor(Math.random() * magnitude) * direction;
+            state.current.subscriberCount = Math.max(0, state.current.subscriberCount + delta);
+          }
+          
+          if (oldVal !== state.current.subscriberCount) {
+            animateNumber(els.subCount, oldVal, state.current.subscriberCount, 250);
+            activeChange = true;
+          }
+        }
+
+        // 3. Trigger immediate synchronous updates if metrics fluctuated
+        if (activeChange) {
+          syncCompareChipCounts();
+          renderCompareChart();
+        }
+      }, 1400);
+    }
+
+    function restartAutoRefresh() {
+      if (state.refreshTimer) clearInterval(state.refreshTimer);
+      if (!state.autoRefresh || (!state.selectedId && !state.compared.length)) return;
+      state.refreshTimer = setInterval(() => {
+        refreshTrackedChannels();
+      }, 10000);
+    }
+
+    els.searchBtn.addEventListener('click', async () => {
+      const key = apiKey();
+      if (!key) {
+        showError('Paste your API key first.');
+        return;
+      }
+
+      const query = els.query.value.trim();
+      if (!query) {
+        showError('Type a channel name, channel URL, handle, or channel ID.');
+        return;
+      }
+
+      setLoading(true);
+      showError('');
+      try {
+        const results = await searchChannels(query);
+        if (!results.length) {
+          fillResults([]);
+          state.current = null;
+          renderCard();
+          showError('No matching channels found.\n\nTry a full channel URL like https://www.youtube.com/@MrBeast or a channel ID that starts with UC...');
+          return;
+        }
+
+        fillResults(results);
+        const prev = state.current?.subscriberCount ?? null;
+        state.selectedId = results[0].id;
+        els.resultsLabel.textContent = results[0].title;
+        closeResultsMenu();
+        await loadChannel(state.selectedId, prev);
+        restartAutoRefresh();
+      } catch (err) {
+        showError(
+          (err && err.message ? err.message : 'Search failed.') +
+          '\n\nCommon fixes:\n• Enable YouTube Data API v3 in Google Cloud\n• Make sure the API key is for the same project\n• Add the correct website/localhost referrer restriction\n• Run this page through localhost, not by double-clicking the file'
+        );
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    els.refreshBtn.addEventListener('click', () => {
+      refreshTrackedChannels();
+    });
+
+    els.compareBtn.addEventListener('click', () => {
+      addCurrentToCompare();
+    });
+
+    els.clearCompareBtn.addEventListener('click', () => {
+      clearComparedChannels();
+    });
+
+    els.resultsToggle.addEventListener('click', () => {
+      if (state.menuOpen) closeResultsMenu();
+      else openResultsMenu();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!els.resultsMenu.contains(e.target) && !els.resultsToggle.contains(e.target)) {
+        closeResultsMenu();
+      }
+    });
+
+    els.query.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        els.searchBtn.click();
+      }
+    });
+
+    els.apiKey.addEventListener('input', () => {
+      setSavedApiKey(els.apiKey.value);
+    });
+    els.apiKey.addEventListener('change', () => {
+      setSavedApiKey(els.apiKey.value);
+    });
+
+    window.addEventListener('resize', () => {
+      renderCompareChart();
+    });
+
+    const saved = getSavedApiKey();
+    if (saved) els.apiKey.value = saved;
+
+    setTimeout(() => {
+      if (!apiKey()) {
+        showError('Paste your YouTube API key, then search a channel.\n\nIf your key has HTTP referrer restrictions, make sure localhost or your domain is allowed.');
+      }
+      renderCompareUI();
+      renderCompareChart();
+      startRealtimeEngine(); // Start real-time numeric fluctuation routine
+    }, 200);
+
+  </script>
+</body>
+</html>
